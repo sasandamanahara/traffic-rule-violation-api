@@ -6,6 +6,8 @@ import uuid
 import cv2
 import numpy as np
 import shutil
+import pytesseract
+pytesseract.pytesseract.tesseract_cmd = r'C:\\Program Files\\Tesseract-OCR\\tesseract.exe'
 
 app = Flask(__name__)
 CORS(app)
@@ -15,6 +17,9 @@ OUTPUT_IMAGE = 'static/detected.jpg'
 SNAPSHOT_FOLDER = 'static/snapshots'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(SNAPSHOT_FOLDER, exist_ok=True)
+
+# Set tesseract path if needed (uncomment and set your path)
+# pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 # Load models
 vehicle_model = YOLO("models/Vehical_Detection.pt")
@@ -46,6 +51,7 @@ def predict():
 
     # Extract data from all models
     detections = []
+    img = cv2.imread(image_path)
     for model_name, results in zip([
         'Vehicle', 'Helmet', 'Triple Riding', 'Number Plate'],
         [vehicle_results, helmet_results, triple_results, number_plate_results]):
@@ -53,13 +59,18 @@ def predict():
             cls_id = int(box.cls[0])
             confidence = float(box.conf[0])
             xyxy = box.xyxy[0].cpu().numpy().tolist()  # [x1, y1, x2, y2]
-            plate_text = '' if model_name != 'Number Plate' else None  # Placeholder for OCR
+            plate_text = ''
+            if model_name == 'Number Plate':
+                x1, y1, x2, y2 = map(int, xyxy)
+                plate_crop = img[y1:y2, x1:x2]
+                if plate_crop.size > 0:
+                    plate_text = pytesseract.image_to_string(plate_crop, config='--psm 7').strip()
             detections.append({
                 'type': model_name,
                 'class_id': cls_id,
                 'confidence': confidence,
                 'bbox': xyxy,
-                'plate_text': plate_text
+                'plate_text': plate_text if model_name == 'Number Plate' else ''
             })
 
     return jsonify({
@@ -107,7 +118,13 @@ def process_video():
                 cls_id = int(box.cls[0])
                 confidence = float(box.conf[0])
                 xyxy = box.xyxy[0].cpu().numpy().tolist()
-                plate_text = '' if model_name != 'Number Plate' else None  # Placeholder for OCR
+                plate_text = ''
+                if model_name == 'Number Plate':
+                    # Crop the number plate region and run OCR
+                    x1, y1, x2, y2 = map(int, xyxy)
+                    plate_crop = frame[y1:y2, x1:x2]
+                    if plate_crop.size > 0:
+                        plate_text = pytesseract.image_to_string(plate_crop, config='--psm 7').strip()
                 frame_violations.append({
                     'type': model_name,
                     'class_id': cls_id,
@@ -115,13 +132,15 @@ def process_video():
                     'frame': total_frames,
                     'timestamp': round(total_frames / fps, 2),
                     'bbox': xyxy,
-                    'plate_text': plate_text
+                    'plate_text': plate_text if model_name == 'Number Plate' else ''
                 })
                 # Draw bounding box on frame
                 color = (255, 255, 0) if model_name == 'Helmet' else (0, 0, 255) if model_name == 'Triple Riding' else (0, 255, 0) if model_name == 'Number Plate' else (255, 0, 0)
                 x1, y1, x2, y2 = map(int, xyxy)
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
                 label = f"{model_name} {(confidence*100):.1f}%"
+                if model_name == 'Number Plate' and plate_text:
+                    label += f" {plate_text}"
                 cv2.putText(frame, label, (x1, max(y1-10, 0)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
         if frame_violations:
             # Save snapshot
