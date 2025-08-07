@@ -12,8 +12,23 @@ UPLOAD_FOLDER = 'uploads'
 OUTPUT_IMAGE = 'static/detected.jpg'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Load model
-model = YOLO("best.pt")
+# Lazy load model
+model = None
+
+def get_model():
+    global model
+    if model is None:
+        print("Loading YOLO model...")
+        model = YOLO("best.pt")
+        print("Model loaded successfully!")
+    return model
+
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({
+        'status': 'API is running',
+        'model_loaded': model is not None
+    })
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -26,6 +41,7 @@ def predict():
     file.save(image_path)
 
     # Run inference
+    model = get_model()
     results = model(image_path)
     results[0].save(filename=OUTPUT_IMAGE)
 
@@ -38,7 +54,7 @@ def predict():
 
     return jsonify({
         'detections': detections,
-        'image_url': f'http://localhost:5000/{OUTPUT_IMAGE}'
+        'image_url': f'http://localhost:5002/{OUTPUT_IMAGE}'
     })
 
 @app.route('/static/<path:filename>')
@@ -46,4 +62,4 @@ def serve_static(filename):
     return send_file(os.path.join('static', filename), mimetype='image/jpeg')
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=5002)
