@@ -5,13 +5,16 @@ import os
 import uuid
 import cv2
 import numpy as np
+import shutil
 
 app = Flask(__name__)
 CORS(app)
 
 UPLOAD_FOLDER = 'uploads'
 OUTPUT_IMAGE = 'static/detected.jpg'
+SNAPSHOT_FOLDER = 'static/snapshots'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(SNAPSHOT_FOLDER, exist_ok=True)
 
 # Load models
 vehicle_model = YOLO("models/Vehical_Detection.pt")
@@ -78,26 +81,28 @@ def process_video():
     total_frames = 0
     start_time = cv2.getTickCount()
 
+    # Clean up old snapshots
+    shutil.rmtree(SNAPSHOT_FOLDER)
+    os.makedirs(SNAPSHOT_FOLDER, exist_ok=True)
+
     while True:
         ret, frame = cap.read()
         if not ret:
             break
         total_frames += 1
-        # Convert frame to RGB for YOLO
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        # Run all three models
         vehicle_results = vehicle_model(rgb_frame)
         helmet_results = helmet_model(rgb_frame)
         triple_results = triple_riding_model(rgb_frame)
-        # Collect detections
+        frame_violations = []
         for model_name, results in zip([
             'Vehicle', 'Helmet', 'Triple Riding'],
             [vehicle_results, helmet_results, triple_results]):
             for box in results[0].boxes:
                 cls_id = int(box.cls[0])
                 confidence = float(box.conf[0])
-                xyxy = box.xyxy[0].cpu().numpy().tolist()  # [x1, y1, x2, y2]
-                violations.append({
+                xyxy = box.xyxy[0].cpu().numpy().tolist()
+                frame_violations.append({
                     'type': model_name,
                     'class_id': cls_id,
                     'confidence': confidence,
@@ -105,6 +110,20 @@ def process_video():
                     'timestamp': round(total_frames / fps, 2),
                     'bbox': xyxy
                 })
+                # Draw bounding box on frame
+                color = (255, 255, 0) if model_name == 'Helmet' else (0, 0, 255) if model_name == 'Triple Riding' else (255, 0, 0)
+                x1, y1, x2, y2 = map(int, xyxy)
+                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                label = f"{model_name} {(confidence*100):.1f}%"
+                cv2.putText(frame, label, (x1, max(y1-10, 0)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+        if frame_violations:
+            # Save snapshot
+            snapshot_name = f"frame_{total_frames}.jpg"
+            snapshot_path = os.path.join(SNAPSHOT_FOLDER, snapshot_name)
+            cv2.imwrite(snapshot_path, frame)
+            for v in frame_violations:
+                v['snapshot_url'] = f"http://localhost:5000/{SNAPSHOT_FOLDER}/{snapshot_name}"
+                violations.append(v)
         processed_frames += 1
     cap.release()
     end_time = cv2.getTickCount()
