@@ -20,6 +20,7 @@ os.makedirs(SNAPSHOT_FOLDER, exist_ok=True)
 vehicle_model = YOLO("models/Vehical_Detection.pt")
 helmet_model = YOLO("models/helmet_Detection.pt")
 triple_riding_model = YOLO("models/Triple_Riding_Detection.pt")
+number_plate_model = YOLO("models/Number_Plate_Detection.pt")
 
 # Remove old model loading
 # model = YOLO("best.pt")
@@ -34,10 +35,11 @@ def predict():
     image_path = os.path.join(UPLOAD_FOLDER, file_id)
     file.save(image_path)
 
-    # Run inference with all three models
+    # Run inference with all four models
     vehicle_results = vehicle_model(image_path)
     helmet_results = helmet_model(image_path)
     triple_results = triple_riding_model(image_path)
+    number_plate_results = number_plate_model(image_path)
 
     # Save processed image from one of the models (e.g., vehicle)
     vehicle_results[0].save(filename=OUTPUT_IMAGE)
@@ -45,17 +47,19 @@ def predict():
     # Extract data from all models
     detections = []
     for model_name, results in zip([
-        'Vehicle', 'Helmet', 'Triple Riding'],
-        [vehicle_results, helmet_results, triple_results]):
+        'Vehicle', 'Helmet', 'Triple Riding', 'Number Plate'],
+        [vehicle_results, helmet_results, triple_results, number_plate_results]):
         for box in results[0].boxes:
             cls_id = int(box.cls[0])
             confidence = float(box.conf[0])
             xyxy = box.xyxy[0].cpu().numpy().tolist()  # [x1, y1, x2, y2]
+            plate_text = '' if model_name != 'Number Plate' else None  # Placeholder for OCR
             detections.append({
                 'type': model_name,
                 'class_id': cls_id,
                 'confidence': confidence,
-                'bbox': xyxy
+                'bbox': xyxy,
+                'plate_text': plate_text
             })
 
     return jsonify({
@@ -94,24 +98,27 @@ def process_video():
         vehicle_results = vehicle_model(rgb_frame)
         helmet_results = helmet_model(rgb_frame)
         triple_results = triple_riding_model(rgb_frame)
+        number_plate_results = number_plate_model(rgb_frame)
         frame_violations = []
         for model_name, results in zip([
-            'Vehicle', 'Helmet', 'Triple Riding'],
-            [vehicle_results, helmet_results, triple_results]):
+            'Vehicle', 'Helmet', 'Triple Riding', 'Number Plate'],
+            [vehicle_results, helmet_results, triple_results, number_plate_results]):
             for box in results[0].boxes:
                 cls_id = int(box.cls[0])
                 confidence = float(box.conf[0])
                 xyxy = box.xyxy[0].cpu().numpy().tolist()
+                plate_text = '' if model_name != 'Number Plate' else None  # Placeholder for OCR
                 frame_violations.append({
                     'type': model_name,
                     'class_id': cls_id,
                     'confidence': confidence,
                     'frame': total_frames,
                     'timestamp': round(total_frames / fps, 2),
-                    'bbox': xyxy
+                    'bbox': xyxy,
+                    'plate_text': plate_text
                 })
                 # Draw bounding box on frame
-                color = (255, 255, 0) if model_name == 'Helmet' else (0, 0, 255) if model_name == 'Triple Riding' else (255, 0, 0)
+                color = (255, 255, 0) if model_name == 'Helmet' else (0, 0, 255) if model_name == 'Triple Riding' else (0, 255, 0) if model_name == 'Number Plate' else (255, 0, 0)
                 x1, y1, x2, y2 = map(int, xyxy)
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
                 label = f"{model_name} {(confidence*100):.1f}%"
