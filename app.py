@@ -88,13 +88,19 @@ def process_video():
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
+    violation_ids = set()
+    violations_data = []
+    current_frame_idx = 0
+
     while cap.isOpened():
         success, frame = cap.read()
         if not success:
             break
 
-        results_helmet = helmet_model.track(frame, persist=True, conf=0.1)
-        results_tripleriding = triple_riding_model.track(frame, persist=True, conf=0.7)
+        current_frame_idx += 1
+
+        results_helmet = helmet_model.track(frame, persist=True, conf=0)
+        results_tripleriding = triple_riding_model.track(frame, persist=True, conf=0.4)
 
         boxes = []
 
@@ -109,44 +115,40 @@ def process_video():
 
         for box in triple_boxes:
             boxes.append(('Triple Riding', box))
-
-        violation_ids = set()
         
         for model_name, box in boxes:
             track_id = int(box.id.cpu().numpy()[0]) if box.id is not None else -1
-            violation_ids.add((model_name, track_id))
+            key = (model_name, track_id)
+            
+            # Only add new track IDs globally
+            if key not in violation_ids:
+                violation_ids.add(key)
+            
+                # Append every box for the frame
+                xyxy = box.xyxy.cpu().numpy().astype(int)[0].tolist()
+                confidence = float(box.conf.cpu().numpy()[0])
+                
+                frame_with_box = frame.copy()
+                x1, y1, x2, y2 = xyxy
+                color = (0, 255, 0) if model_name == 'Helmet' else (0, 0, 255)
+                cv2.rectangle(frame_with_box, (x1, y1), (x2, y2), color, thickness=2)
 
-        violations_data = []
-        for model_name, box in boxes:
-            xyxy = box.xyxy.cpu().numpy().astype(int)[0].tolist()   # [x1, y1, x2, y2]
-            confidence = float(box.conf.cpu().numpy()[0])           # float
-            track_id = int(box.id.cpu().numpy()[0]) if box.id is not None else -1
+                snapshot_filename = f"{uuid.uuid4()}.jpg"
+                snapshot_path = os.path.join(SNAPSHOT_FOLDER, snapshot_filename)
+                cv2.imwrite(snapshot_path, frame_with_box)
+                
+                snapshot_url = f"http://localhost:5000/static/snapshots/{snapshot_filename}"
 
-            # Copy the frame so original is not changed
-            frame_with_box = frame.copy()
+                violations_data.append({
+                    'type': model_name,
+                    'confidence': confidence,
+                    'frame': current_frame_idx,
+                    'timestamp': round(current_frame_idx / fps, 2),
+                    'bbox': xyxy,
+                    'plate_text': "plate_text",
+                    'snapshot_url': snapshot_url
+                })
 
-            # Draw bounding box on the copied frame
-            x1, y1, x2, y2 = xyxy
-            color = (0, 255, 0) if model_name == 'Helmet' else (0, 0, 255)
-            cv2.rectangle(frame_with_box, (x1, y1), (x2, y2), color, thickness=2)
-
-            # Save snapshot image
-            snapshot_filename = f"{uuid.uuid4()}.jpg"
-            snapshot_path = os.path.join(SNAPSHOT_FOLDER, snapshot_filename)
-            cv2.imwrite(snapshot_path, frame_with_box)
-
-            # Public URL for the snapshot
-            snapshot_url = f"http://localhost:5000/static/snapshots/{snapshot_filename}"
-
-            violations_data.append({
-                'type': model_name,
-                'confidence': confidence,
-                'frame': frame_count,
-                'timestamp': round(frame_count / fps, 2),
-                'bbox': xyxy,
-                'plate_text': "plate_text",
-                'snapshot_url': snapshot_url
-            })
 
 
             
