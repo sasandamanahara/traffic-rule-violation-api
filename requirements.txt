@@ -5,4 +5,4 @@ opencv-python
 torch
 torchvision
 torchaudio
-git+https://github.com/ultralytics/yolov5.git
+yolov5

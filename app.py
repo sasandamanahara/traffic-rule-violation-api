@@ -320,5 +320,24 @@ def serve_processed_video(filename):
     return send_file(os.path.join('output_videos', filename), mimetype='video/mp4')
 
 
+@app.route('/api/lanes', methods=['POST'])
+def save_lanes():
+    """
+    Receives lane configuration data (pixels and points) from frontend and saves to lanes_config.json.
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    # Save to file
+    try:
+        with open('lanes_config.json', 'w') as f:
+            import json
+            json.dump(data, f)
+        return jsonify({'message': 'Lanes data saved successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     app.run(debug=False)
