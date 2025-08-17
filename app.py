@@ -1,3 +1,4 @@
+import json
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from ultralytics import YOLO
@@ -319,24 +320,24 @@ def serve_static(filename):
 def serve_processed_video(filename):
     return send_file(os.path.join('output_videos', filename), mimetype='video/mp4')
 
-
 @app.route('/api/lanes', methods=['POST'])
 def save_lanes():
-    """
-    Receives lane configuration data (pixels and points) from frontend and saves to lanes_config.json.
-    """
-    data = request.get_json()
-    if not data:
-        return jsonify({'error': 'No data provided'}), 400
+    if 'video' not in request.files or 'pixels_file' not in request.files:
+        return jsonify({'error': 'Video or lane data file missing'}), 400
 
-    # Save to file
-    try:
-        with open('lanes_config.json', 'w') as f:
-            import json
-            json.dump(data, f)
-        return jsonify({'message': 'Lanes data saved successfully'}), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    video_file = request.files['video']
+    pixels_file = request.files['pixels_file']
+
+    # Save video
+    os.makedirs("uploads", exist_ok=True)
+    video_path = os.path.join("uploads", video_file.filename)
+    video_file.save(video_path)
+
+    # Save lane data JSON file
+    lane_data_path = os.path.join("uploads", pixels_file.filename)
+    pixels_file.save(lane_data_path)
+
+    return jsonify({'message': 'Video and lane data file saved successfully'}), 200
 
 
 if __name__ == '__main__':
