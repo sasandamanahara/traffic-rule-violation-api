@@ -10,6 +10,7 @@ import shutil
 import time
 import torch
 import torchvision 
+from lane_processing import process_video_lane
 
 app = Flask(__name__)
 CORS(app)
@@ -331,13 +332,23 @@ def save_lanes():
     # Save video
     os.makedirs("uploads", exist_ok=True)
     video_path = os.path.join("uploads", video_file.filename)
+    lane_json_path = os.path.join("uploads", pixels_file.filename)
     video_file.save(video_path)
 
     # Save lane data JSON file
     lane_data_path = os.path.join("uploads", pixels_file.filename)
     pixels_file.save(lane_data_path)
 
-    return jsonify({'message': 'Video and lane data file saved successfully'}), 200
+    try:
+        processed_image_path, pixels_json_path = process_video_lane(video_path, lane_json_path)
+        return jsonify({
+            'message': 'Video and lane processed successfully',
+            'processed_image': processed_image_path,
+            'pixels_json': pixels_json_path
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 
 if __name__ == '__main__':
