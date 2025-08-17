@@ -1,5 +1,4 @@
-import json
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
 from ultralytics import YOLO
 import os
@@ -10,7 +9,7 @@ import shutil
 import time
 import torch
 import torchvision 
-from lane_processing import process_video_lane
+from lane_processing import process_video_with_lanes
 
 app = Flask(__name__)
 CORS(app)
@@ -340,16 +339,19 @@ def save_lanes():
     pixels_file.save(lane_data_path)
 
     try:
-        processed_image_path, pixels_json_path = process_video_lane(video_path, lane_json_path)
+        output_video, violations_json = process_video_with_lanes(video_path, lane_json_path)
         return jsonify({
-            'message': 'Video and lane processed successfully',
-            'processed_image': processed_image_path,
-            'pixels_json': pixels_json_path
+            "message": "Processing completed",
+            "output_video": output_video,
+            "violations": violations_json
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/processed/<path:filename>')
+def serve_video(filename):
+    return send_file(os.path.join('processed', filename), mimetype='video/mp4', as_attachment=False)
 
 if __name__ == '__main__':
     app.run(debug=False)
