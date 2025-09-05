@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file, send_from_directory
+from flask import Flask, request, jsonify, send_file, Response,abort
 from flask_cors import CORS
 from ultralytics import YOLO
 import os
@@ -10,6 +10,7 @@ import time
 import torch
 import torchvision 
 from lane_processing import process_video_with_lanes
+import re
 
 app = Flask(__name__)
 CORS(app)
@@ -349,9 +350,66 @@ def save_lanes():
         return jsonify({'error': str(e)}), 500
 
 
+# @app.route('/processed/<path:filename>')
+# def serve_video(filename):
+#     return send_file(os.path.join('processed', filename), mimetype='video/mp4', as_attachment=False)
+
+
+
 @app.route('/processed/<path:filename>')
 def serve_video(filename):
-    return send_file(os.path.join('processed', filename), mimetype='video/mp4', as_attachment=False)
+    file_path = os.path.join("processed", filename)
+    if not os.path.exists(file_path):
+        abort(404)
+
+    file_size = os.path.getsize(file_path)
+    range_header = request.headers.get("Range")
+
+    if range_header:
+        # Example: "Range: bytes=1000-2000"
+        range_value = range_header.replace("bytes=", "").strip()
+        start_str, end_str = range_value.split("-")
+
+        try:
+            byte1 = int(start_str) if start_str else 0
+        except ValueError:
+            byte1 = 0
+
+        try:
+            byte2 = int(end_str) if end_str else file_size - 1
+        except ValueError:
+            byte2 = file_size - 1
+
+        # Clamp to valid range
+        byte1 = max(0, byte1)
+        byte2 = min(file_size - 1, byte2)
+
+        # If invalid range (byte2 < byte1), reset to full file
+        if byte2 < byte1:
+            byte1, byte2 = 0, file_size - 1
+
+        length = byte2 - byte1 + 1
+        if length < 0:
+            length = 0  # safety net
+
+        with open(file_path, "rb") as f:
+            f.seek(byte1)
+            data = f.read(length)
+
+        rv = Response(
+            data,
+            206,
+            mimetype="video/mp4",
+            content_type="video/mp4",
+            direct_passthrough=True,
+        )
+        rv.headers.add("Content-Range", f"bytes {byte1}-{byte2}/{file_size}")
+        rv.headers.add("Accept-Ranges", "bytes")
+        rv.headers.add("Content-Length", str(length))
+        return rv
+
+    # No Range header → return full file
+    return send_file(file_path, mimetype="video/mp4")
 
 if __name__ == '__main__':
     app.run(debug=False)
