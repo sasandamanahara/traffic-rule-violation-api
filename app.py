@@ -148,6 +148,7 @@ def process_video():
     input_path = os.path.join(UPLOAD_FOLDER, file_id)
     file.save(input_path)
 
+
     cap = cv2.VideoCapture(input_path)
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = cap.get(cv2.CAP_PROP_FPS)
