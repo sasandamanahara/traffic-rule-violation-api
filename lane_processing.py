@@ -129,8 +129,8 @@ def process_video_with_lanes(video_path, lane_json_path, output_dir="processed",
                     })
 
         # Draw lanes
-        for poly in lane_regions:
-            cv2.polylines(annotated_frame, [poly], True, (255,255,0), 2)
+        # for poly in lane_regions:
+        #     cv2.polylines(annotated_frame, [poly], True, (255,255,0), 2)
 
         out.write(annotated_frame)
 
