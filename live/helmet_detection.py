@@ -3,7 +3,7 @@ import cv2
 
 model_helmet = YOLO("../models/Helmet_Detection.pt")
 
-def check_helmet_triple(crop, frame, x1, y1):
+def check_helmet_triple(crop, frame, x1, y1, x2, y2):
     """
     Checks for helmet use and triple riding violations.
     """
@@ -18,3 +18,6 @@ def check_helmet_triple(crop, frame, x1, y1):
     if helmet_count < len(persons):
         cv2.putText(frame, "NO HELMET!", (x1, y1 - 70),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        # Draw on the original frame
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)  # red box
+

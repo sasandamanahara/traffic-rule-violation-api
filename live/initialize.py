@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
-def initialize_stream(video_source="1.mp4"):
+def initialize_stream(video_source):
     """
     Detects vehicle motion, draws two parallel lines for detection,
     and performs pixel-to-meter calibration automatically using car width.
@@ -85,7 +85,7 @@ def initialize_stream(video_source="1.mp4"):
 
     # Load YOLO
     model = YOLO("yolov8n.pt")
-    cap = cv2.VideoCapture("1.mp4")
+    cap = cv2.VideoCapture(video_source)
 
     # Define fixed vertical lines for calibration
     ret, frame = cap.read()

@@ -1,3 +1,6 @@
+import cv2
+
+
 def check_direction_violation(obj_id, cx, cy, last_positions, directions, frame, x1, y1):
     """
     Checks for direction violation and annotates frame.
