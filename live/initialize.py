@@ -83,19 +83,31 @@ def initialize_stream(video_source="1.mp4"):
     SAMPLE_CARS = 5
     pixel_per_meter_values = []
 
-    LINE_X1 = int(mid_pt[0] - offset_vec[0])
-    LINE_X2 = int(mid_pt[0] + offset_vec[0])
+    # Load YOLO
+    model = YOLO("yolov8n.pt")
+    cap = cv2.VideoCapture("1.mp4")
 
-    cap = cv2.VideoCapture(video_source)
+    # Define fixed vertical lines for calibration
+    ret, frame = cap.read()
+    if not ret:
+        raise Exception("Cannot read video")
+
+    h, w, _ = frame.shape
+    LINE_X1 = int(w * 0.35)
+    LINE_X2 = int(w * 0.65)
+
     while len(pixel_per_meter_values) < SAMPLE_CARS:
         ret, frame = cap.read()
         if not ret:
             break
 
+        # Run YOLO tracking
         results = model.track(frame, persist=True, verbose=False)
-        if results and results[0].boxes.id is not None:
+
+        if results and len(results[0].boxes) > 0:
             boxes = results[0].boxes.xyxy.cpu().numpy()
             classes = results[0].boxes.cls.cpu().numpy()
+
             for box, cls in zip(boxes, classes):
                 if int(cls) == CLASS_ID_CAR:
                     x1, _, x2, _ = box
@@ -104,6 +116,7 @@ def initialize_stream(video_source="1.mp4"):
                         box_w = x2 - x1
                         ppm = box_w / CAR_LENGTH_M
                         pixel_per_meter_values.append(ppm)
+                        print(f"[DEBUG] Car detected, ppm={ppm:.2f}")
                         if len(pixel_per_meter_values) >= SAMPLE_CARS:
                             break
 
