@@ -1,7 +1,7 @@
 import cv2
 from ultralytics import YOLO
 from speed_detection import calculate_speed
-from helmet_detection import check_helmet_triple
+from live.helmet_triple_detection import check_helmet_triple
 
 # ------------------- Main Detection ------------------- #
 def detect_vehicles(video_source, calibration):
