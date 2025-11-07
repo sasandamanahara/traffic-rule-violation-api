@@ -1,27 +1,29 @@
 import cv2
+import math
 import numpy as np
+import pandas as pd
 from ultralytics import YOLO
 
-def initialize_stream(video_source="2.mp4"):
+def initialize_stream(video_source="1.mp4"):
     """
-    Tracks vehicles, observes how bounding box centers move,
-    draws motion lines, perpendiculars,
-    and selects the perpendicular line closest to the image center.
-    Then draws two parallel lines to it.
+    Detects vehicle motion, draws perpendicular and parallel lines,
+    and performs pixel-to-meter calibration automatically using car width.
+    Returns calibration data for later use.
     """
+    # --- Load YOLO model ---
     model = YOLO("yolov8n.pt")
     cap = cv2.VideoCapture(video_source)
     fps = cap.get(cv2.CAP_PROP_FPS)
     frame_time = 1 / fps if fps > 0 else 0.033
 
-    print("[INFO] Starting motion observation... Move vehicles in view.")
+    print("[INFO] Starting motion observation for calibration...")
 
     paths = {}
     frame_idx = 0
     frame_limit = 80
     first_frame = None
 
-    # --- collect vehicle motion ---
+    # -------------------- Stage 1: Detect motion direction --------------------
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -41,8 +43,6 @@ def initialize_stream(video_source="2.mp4"):
                     x1, y1, x2, y2 = box
                     cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
                     paths.setdefault(obj_id, []).append((cx, cy))
-
-                    # draw bounding box & center
                     cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
                     cv2.circle(frame, (int(cx), int(cy)), 4, (0, 0, 255), -1)
 
@@ -57,7 +57,7 @@ def initialize_stream(video_source="2.mp4"):
 
     cap.release()
 
-    # --- compute vehicle motion lines ---
+    # -------------------- Stage 2: Compute motion + perpendiculars --------------------
     motion_lines = []
     for obj_id, points in paths.items():
         if len(points) >= 5:
@@ -67,12 +67,11 @@ def initialize_stream(video_source="2.mp4"):
 
     if not motion_lines:
         print("[WARN] No valid vehicle motion detected.")
-        return
+        return None
 
     output = first_frame.copy()
     perpendiculars = []
 
-    # --- draw motion and perpendicular lines ---
     for (start, end) in motion_lines:
         dx, dy = end - start
         mag = np.hypot(dx, dy)
@@ -81,50 +80,101 @@ def initialize_stream(video_source="2.mp4"):
         dx /= mag
         dy /= mag
 
-        # blue motion line
-        cv2.arrowedLine(output, tuple(start.astype(int)), tuple(end.astype(int)),
-                        (255, 0, 0), 3, tipLength=0.2)
+        cv2.arrowedLine(output, tuple(start.astype(int)), tuple(end.astype(int)), (255, 0, 0), 3, tipLength=0.2)
 
-        # perpendicular direction
         perp_dx, perp_dy = dy, -dx
         mid = (start + end) / 2
         line_len = 100
-
         pt1a = (int(mid[0] - perp_dx * line_len), int(mid[1] - perp_dy * line_len))
         pt1b = (int(mid[0] + perp_dx * line_len), int(mid[1] + perp_dy * line_len))
         cv2.line(output, pt1a, pt1b, (0, 0, 255), 2)
-
         perpendiculars.append((mid, (perp_dx, perp_dy)))
 
-    # --- choose the perpendicular line closest to the image center ---
+    # -------------------- Stage 3: Select central perpendicular --------------------
     h, w, _ = output.shape
-    if perpendiculars:
-        center = np.array([w / 2, h / 2])
-        distances = [np.linalg.norm(mid - center) for mid, _ in perpendiculars]
-        mid_idx = int(np.argmin(distances))
-        mid_pt, (perp_dx, perp_dy) = perpendiculars[mid_idx]
+    center = np.array([w / 2, h / 2])
+    distances = [np.linalg.norm(mid - center) for mid, _ in perpendiculars]
+    mid_idx = int(np.argmin(distances))
+    mid_pt, (perp_dx, perp_dy) = perpendiculars[mid_idx]
 
-        # main perpendicular line (yellow)
-        line_length = max(h, w)
-        p1 = (int(mid_pt[0] - perp_dx * line_length), int(mid_pt[1] - perp_dy * line_length))
-        p2 = (int(mid_pt[0] + perp_dx * line_length), int(mid_pt[1] + perp_dy * line_length))
-        cv2.line(output, p1, p2, (0, 255, 255), 3)
+    line_length = max(h, w)
+    p1 = (int(mid_pt[0] - perp_dx * line_length), int(mid_pt[1] - perp_dy * line_length))
+    p2 = (int(mid_pt[0] + perp_dx * line_length), int(mid_pt[1] + perp_dy * line_length))
+    cv2.line(output, p1, p2, (0, 255, 255), 3)
 
-        # --- draw two parallel lines to the selected perpendicular ---
-        parallel_offset = 100  # distance between lines
-        # offset perpendicular to the perpendicular (i.e., along motion direction)
-        offset_vec = np.array([parallel_offset * (-perp_dy), parallel_offset * perp_dx])
+    # Draw two parallel lines
+    parallel_offset = 100
+    offset_vec = np.array([parallel_offset * (-perp_dy), parallel_offset * perp_dx])
+    for sign in [+1, -1]:
+        shift = mid_pt + sign * offset_vec
+        p3 = (int(shift[0] - perp_dx * line_length), int(shift[1] - perp_dy * line_length))
+        p4 = (int(shift[0] + perp_dx * line_length), int(shift[1] + perp_dy * line_length))
+        cv2.line(output, p3, p4, (0, 255, 0), 2)
 
-        for sign in [+1, -1]:
-            shift = mid_pt + sign * offset_vec
-            p3 = (int(shift[0] - perp_dx * line_length), int(shift[1] - perp_dy * line_length))
-            p4 = (int(shift[0] + perp_dx * line_length), int(shift[1] + perp_dy * line_length))
-            cv2.line(output, p3, p4, (0, 255, 0), 2)
+    # -------------------- Stage 4: Pixel-to-meter calibration --------------------
+    print("[INFO] Starting pixel-to-meter calibration...")
 
-    cv2.putText(output, "Vehicle Motion + Center Perpendicular + Parallel Lines", (30, 40),
+    # Constants
+    CAR_LENGTH_M = 4.5
+    CLASS_ID_CAR = 2
+    SAMPLE_CARS = 5
+    pixel_per_meter_values = []
+
+    # pick vertical line positions using the chosen perpendicular
+    LINE_X1 = int(mid_pt[0] - offset_vec[0])
+    LINE_X2 = int(mid_pt[0] + offset_vec[0])
+
+    cap = cv2.VideoCapture(video_source)
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        cv2.line(frame, (LINE_X1, 0), (LINE_X1, h), (0, 0, 255), 2)
+        cv2.line(frame, (LINE_X2, 0), (LINE_X2, h), (0, 255, 0), 2)
+
+        results = model.track(frame, persist=True, verbose=False)
+        if results and results[0].boxes.id is not None:
+            boxes = results[0].boxes.xyxy.cpu().numpy()
+            classes = results[0].boxes.cls.cpu().numpy()
+
+            for box, cls in zip(boxes, classes):
+                if int(cls) == CLASS_ID_CAR:
+                    x1, y1, x2, y2 = box
+                    cx = int((x1 + x2) / 2)
+                    if LINE_X1 < cx < LINE_X2:
+                        box_w = x2 - x1
+                        ppm = box_w / CAR_LENGTH_M
+                        pixel_per_meter_values.append(ppm)
+                        if len(pixel_per_meter_values) >= SAMPLE_CARS:
+                            break
+        if len(pixel_per_meter_values) >= SAMPLE_CARS:
+            break
+
+    cap.release()
+    PIXELS_PER_METER = float(np.mean(pixel_per_meter_values)) if pixel_per_meter_values else 1.0
+    print(f"[INFO] Calibrated scale: {PIXELS_PER_METER:.2f} pixels per meter")
+
+    cv2.putText(output, "Motion + Perpendicular + Parallel + Calibration", (30, 40),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
     cv2.imshow("Final Result", output)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
-    return output
+    lines_pts = []
+    for sign in [+1, -1]:
+        shift = mid_pt + sign * offset_vec
+        p3 = (int(shift[0] - perp_dx * line_length), int(shift[1] - perp_dy * line_length))
+        p4 = (int(shift[0] + perp_dx * line_length), int(shift[1] + perp_dy * line_length))
+        cv2.line(output, p3, p4, (0, 255, 0), 2)
+        lines_pts.append((p3, p4))
+
+    # Return calibration info
+    calibration = {
+        "pixels_per_meter": PIXELS_PER_METER,
+        "lines": lines_pts,
+        "frame_time": frame_time,
+        "frame_size": (w, h)
+    }
+
+    return calibration
