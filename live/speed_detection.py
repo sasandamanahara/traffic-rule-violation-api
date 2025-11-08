@@ -1,7 +1,7 @@
 import math
 import cv2
 import numpy as np
-
+import os
 
 def is_inside_lines(p, line1, line2):
     """
@@ -21,10 +21,12 @@ def is_inside_lines(p, line1, line2):
     return 0 <= dist <= line_dist if line_dist > 0 else line_dist <= dist <= 0
 
 
-def calculate_speed(obj_id, cx, cy,line1,line2, last_positions, PIXELS_PER_METER, frame_time, speeds, frame, box):
+def calculate_speed(obj_id, cx, cy, line1, line2, last_positions, 
+                    PIXELS_PER_METER, frame_time, speeds, frame, box):
     """
     Updates speeds dictionary after calculating speed.
     Draws a blue box if speed > 30 km/h.
+    Saves cropped image of speeding vehicle.
     """
     inside = is_inside_lines((cx, cy), line1, line2)
     if inside:
@@ -37,11 +39,23 @@ def calculate_speed(obj_id, cx, cy,line1,line2, last_positions, PIXELS_PER_METER
             speeds[obj_id] = 0.8 * speeds.get(obj_id, speed) + 0.2 * speed
 
             if frame is not None and box is not None:
-                x1, y1, x2, y2 = [int(v) for v in box]  # ensure integers
-                if speeds[obj_id] > 30:
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)  # blue box
-                # Always show speed text
-                cv2.putText(frame, f"{speeds[obj_id]:.1f} km/h", (x1, y1 - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+                x1, y1, x2, y2 = [int(v) for v in box]
+                current_speed = speeds[obj_id]
+
+                # Draw bounding box and speed text
+                color = (255, 0, 0) if current_speed > 30 else (0, 255, 0)
+                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                cv2.putText(frame, f"{current_speed:.1f} km/h", 
+                            (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 
+                            0.6, (255, 255, 0), 2)
+
+                # --- Save speeding vehicle image ---
+                if current_speed > 30:
+                    folder_path = os.path.join("violations", "speed", f"ID_{obj_id}")
+                    os.makedirs(folder_path, exist_ok=True)
+                    crop = frame[y1:y2, x1:x2]
+                    if crop.size > 0:
+                        filename = os.path.join(folder_path, f"speed_{int(current_speed)}.jpg")
+                        cv2.imwrite(filename, crop)
 
     return speeds
