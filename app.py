@@ -9,10 +9,109 @@ import shutil
 import time
 import torch
 import torchvision 
+import jwt
+import bcrypt
+from functools import wraps
+from datetime import datetime, timedelta
 from lane_processing import process_video_with_lanes
+from database import get_db, get_database_info
+from db_models import ViolationModel, CameraModel, AdminModel
 
 app = Flask(__name__)
-CORS(app)
+
+# Configure CORS to allow requests from frontend
+# In development, allow all origins (change in production)
+CORS(app, 
+     origins="*",
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+     allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+     expose_headers=["Content-Type", "Authorization"],
+     supports_credentials=False)
+
+# Add after_request handler to ensure CORS headers are always set
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+    response.headers.add('Access-Control-Max-Age', '3600')
+    return response
+
+# JWT Secret Key (in production, use environment variable)
+app.config['SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
+JWT_ALGORITHM = 'HS256'
+JWT_EXPIRATION_HOURS = 24
+
+# Initialize database connection
+db = get_db()
+
+# ========================================
+# Authentication Helper Functions
+# ========================================
+
+def hash_password(password):
+    """Hash a password using bcrypt"""
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verify_password(password, hashed):
+    """Verify a password against a hash"""
+    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+
+def generate_token(admin_id, username):
+    """Generate JWT token for admin"""
+    payload = {
+        'admin_id': admin_id,
+        'username': username,
+        'exp': datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS),
+        'iat': datetime.utcnow()
+    }
+    return jwt.encode(payload, app.config['SECRET_KEY'], algorithm=JWT_ALGORITHM)
+
+def verify_token(token):
+    """Verify JWT token and return payload"""
+    try:
+        payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=[JWT_ALGORITHM])
+        return payload
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
+
+def require_auth(f):
+    """Decorator to require authentication for routes"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        token = None
+        
+        # Check for token in Authorization header
+        if 'Authorization' in request.headers:
+            auth_header = request.headers['Authorization']
+            try:
+                token = auth_header.split(' ')[1]  # Bearer <token>
+            except IndexError:
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid authorization header format'
+                }), 401
+        
+        if not token:
+            return jsonify({
+                'success': False,
+                'error': 'Authentication token is missing'
+            }), 401
+        
+        payload = verify_token(token)
+        if not payload:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid or expired token'
+            }), 401
+        
+        # Add admin info to request context
+        request.current_admin = payload
+        return f(*args, **kwargs)
+    
+    return decorated_function
 
 UPLOAD_FOLDER = 'uploads'
 OUTPUT_IMAGE = 'static/detected.jpg'
@@ -69,7 +168,7 @@ def predict():
 
     return jsonify({
         'detections': detections,
-        'image_url': f'http://localhost:5000/{OUTPUT_IMAGE}'
+        'image_url': f'http://localhost:5001/{OUTPUT_IMAGE}'
     })
 
 def box_belongs_to_rider(helmet_box, rider_boxes, threshold=0.9):
@@ -257,7 +356,7 @@ def process_video():
                 snapshot_filename = f"{uuid.uuid4()}.jpg"
                 snapshot_path = os.path.join(SNAPSHOT_FOLDER, snapshot_filename)
                 cv2.imwrite(snapshot_path, frame_with_box)
-                snapshot_url = f"http://localhost:5000/static/snapshots/{snapshot_filename}"
+                snapshot_url = f"http://localhost:5001/static/snapshots/{snapshot_filename}"
 
                 violations_data.append({
                     'type': model_name,
@@ -300,12 +399,41 @@ def process_video():
     cap.release()
     out.release()
 
+    # Save violations to MongoDB
+    saved_violation_ids = []
+    if violations_data:
+        # Prepare violations for MongoDB
+        mongo_violations = []
+        for violation in violations_data:
+            mongo_violation = {
+                'type': violation['type'],
+                'confidence': violation['confidence'],
+                'frame': violation['frame'],
+                'timestamp': violation['timestamp'],
+                'bbox': violation['bbox'],
+                'snapshot_url': violation['snapshot_url'],
+                'video_file': file_id,
+                'status': 'pending',
+                'location': 'Unknown',  # Update with actual location if available
+                'description': f"{violation['type']} detected at {violation['timestamp']}s"
+            }
+            mongo_violations.append(mongo_violation)
+        
+        # Save to MongoDB
+        saved_violation_ids = ViolationModel.create_many_violations(mongo_violations)
+        if saved_violation_ids:
+            print(f"✅ Saved {len(saved_violation_ids)} violations to MongoDB")
+        else:
+            print("⚠️  MongoDB not available, violations not saved to database")
+
     return jsonify({
         'totalFrames': frame_count,
         'processedFrames': frame_count,
         'violationsDetected': len(violation_ids),
         'processingTime': round(time.time() - start_time, 2),
-        'violations': violations_data
+        'violations': violations_data,
+        'saved_to_db': len(saved_violation_ids) > 0,
+        'db_violation_ids': saved_violation_ids
     })
 
 
@@ -353,5 +481,443 @@ def save_lanes():
 def serve_video(filename):
     return send_file(os.path.join('processed', filename), mimetype='video/mp4', as_attachment=False)
 
+
+# ========================================
+# Authentication API Endpoints
+# ========================================
+
+# Handle OPTIONS preflight requests
+@app.route('/api/auth/register', methods=['OPTIONS'])
+def register_options():
+    return '', 200
+
+@app.route('/api/auth/register', methods=['POST'])
+def register_admin():
+    """Register a new admin user"""
+    try:
+        data = request.json
+        
+        # Validate required fields
+        if not data or not data.get('username') or not data.get('email') or not data.get('password'):
+            return jsonify({
+                'success': False,
+                'error': 'Username, email, and password are required'
+            }), 400
+        
+        # Check if admin already exists
+        existing = AdminModel.get_admin_by_username(data['username'])
+        if existing:
+            return jsonify({
+                'success': False,
+                'error': 'Username already exists'
+            }), 400
+        
+        existing = AdminModel.get_admin_by_email(data['email'])
+        if existing:
+            return jsonify({
+                'success': False,
+                'error': 'Email already exists'
+            }), 400
+        
+        # Hash password
+        hashed_password = hash_password(data['password'])
+        
+        # Create admin
+        admin_data = {
+            'username': data['username'],
+            'email': data['email'],
+            'password': hashed_password,
+            'role': data.get('role', 'admin'),
+            'is_active': True
+        }
+        
+        admin_id = AdminModel.create_admin(admin_data)
+        
+        if admin_id:
+            # Generate token
+            token = generate_token(admin_id, data['username'])
+            
+            return jsonify({
+                'success': True,
+                'message': 'Admin registered successfully',
+                'token': token,
+                'admin': {
+                    'id': admin_id,
+                    'username': data['username'],
+                    'email': data['email'],
+                    'role': admin_data['role']
+                }
+            }), 201
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to create admin'
+            }), 500
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def login_admin():
+    """Login admin user"""
+    try:
+        data = request.json
+        
+        # Validate required fields
+        if not data or not data.get('username') or not data.get('password'):
+            return jsonify({
+                'success': False,
+                'error': 'Username and password are required'
+            }), 400
+        
+        # Get admin by username
+        admin = AdminModel.get_admin_by_username(data['username'])
+        
+        if not admin:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid username or password'
+            }), 401
+        
+        # Check if admin is active
+        if not admin.get('is_active', True):
+            return jsonify({
+                'success': False,
+                'error': 'Account is deactivated'
+            }), 403
+        
+        # Verify password
+        if not verify_password(data['password'], admin['password']):
+            return jsonify({
+                'success': False,
+                'error': 'Invalid username or password'
+            }), 401
+        
+        # Generate token
+        token = generate_token(admin['_id'], admin['username'])
+        
+        return jsonify({
+            'success': True,
+            'message': 'Login successful',
+            'token': token,
+            'admin': {
+                'id': admin['_id'],
+                'username': admin['username'],
+                'email': admin.get('email', ''),
+                'role': admin.get('role', 'admin')
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/auth/verify', methods=['POST'])
+def verify_auth():
+    """Verify authentication token"""
+    try:
+        data = request.json
+        token = data.get('token') if data else None
+        
+        # Also check Authorization header
+        if not token and 'Authorization' in request.headers:
+            auth_header = request.headers['Authorization']
+            try:
+                token = auth_header.split(' ')[1]
+            except IndexError:
+                pass
+        
+        if not token:
+            return jsonify({
+                'success': False,
+                'error': 'Token is required'
+            }), 400
+        
+        payload = verify_token(token)
+        
+        if not payload:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid or expired token'
+            }), 401
+        
+        # Get admin info
+        admin = AdminModel.get_admin_by_id(payload['admin_id'])
+        
+        if not admin or not admin.get('is_active', True):
+            return jsonify({
+                'success': False,
+                'error': 'Admin not found or inactive'
+            }), 401
+        
+        return jsonify({
+            'success': True,
+            'valid': True,
+            'admin': {
+                'id': admin['_id'],
+                'username': admin['username'],
+                'email': admin.get('email', ''),
+                'role': admin.get('role', 'admin')
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/auth/me', methods=['GET'])
+@require_auth
+def get_current_admin():
+    """Get current authenticated admin info"""
+    try:
+        admin_id = request.current_admin['admin_id']
+        admin = AdminModel.get_admin_by_id(admin_id)
+        
+        if not admin:
+            return jsonify({
+                'success': False,
+                'error': 'Admin not found'
+            }), 404
+        
+        return jsonify({
+            'success': True,
+            'admin': {
+                'id': admin['_id'],
+                'username': admin['username'],
+                'email': admin.get('email', ''),
+                'role': admin.get('role', 'admin'),
+                'created_at': admin.get('created_at', '').isoformat() if admin.get('created_at') else None
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ========================================
+# MongoDB API Endpoints
+# ========================================
+
+@app.route('/api/violations', methods=['GET'])
+def get_violations():
+    """
+    Get all violations with optional filtering
+    Query params: limit, skip, type, status
+    """
+    try:
+        limit = int(request.args.get('limit', 100))
+        skip = int(request.args.get('skip', 0))
+        violation_type = request.args.get('type')
+        status = request.args.get('status')
+        
+        # Build filters
+        filters = {}
+        if violation_type:
+            filters['type'] = violation_type
+        if status:
+            filters['status'] = status
+        
+        violations = ViolationModel.get_all_violations(
+            limit=limit,
+            skip=skip,
+            filters=filters if filters else None
+        )
+        
+        return jsonify({
+            'success': True,
+            'count': len(violations),
+            'violations': violations
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/violations/<violation_id>', methods=['GET'])
+def get_violation(violation_id):
+    """Get a single violation by ID"""
+    try:
+        violation = ViolationModel.get_violation_by_id(violation_id)
+        
+        if violation:
+            return jsonify({
+                'success': True,
+                'violation': violation
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Violation not found'
+            }), 404
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/violations/<violation_id>', methods=['PUT'])
+def update_violation(violation_id):
+    """Update a violation record"""
+    try:
+        update_data = request.json
+        
+        success = ViolationModel.update_violation(violation_id, update_data)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Violation updated successfully'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to update violation'
+            }), 400
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/violations/<violation_id>', methods=['DELETE'])
+def delete_violation(violation_id):
+    """Delete a violation record"""
+    try:
+        success = ViolationModel.delete_violation(violation_id)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Violation deleted successfully'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to delete violation'
+            }), 400
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/violations/stats', methods=['GET'])
+def get_violation_stats():
+    """Get violation statistics"""
+    try:
+        stats = ViolationModel.get_violation_stats()
+        
+        return jsonify({
+            'success': True,
+            'stats': stats
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/cameras', methods=['GET'])
+def get_cameras():
+    """Get all cameras"""
+    try:
+        cameras = CameraModel.get_all_cameras()
+        
+        return jsonify({
+            'success': True,
+            'count': len(cameras),
+            'cameras': cameras
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/cameras', methods=['POST'])
+def create_camera():
+    """Create a new camera record"""
+    try:
+        camera_data = request.json
+        
+        camera_id = CameraModel.create_camera(camera_data)
+        
+        if camera_id:
+            return jsonify({
+                'success': True,
+                'message': 'Camera created successfully',
+                'camera_id': camera_id
+            }), 201
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to create camera'
+            }), 400
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Check API and database health"""
+    db_status = db.connected if db is not None else False
+    
+    response = {
+        'api_status': 'running',
+        'database_connected': db_status,
+        'database_type': 'MongoDB' if db_status else 'None'
+    }
+    
+    # Add database info if connected
+    if db_status:
+        db_info = get_database_info()
+        if db_info:
+            response['database_info'] = db_info
+    
+    return jsonify(response)
+
+
+@app.route('/api/database/info', methods=['GET'])
+def database_info():
+    """Get detailed database information"""
+    try:
+        db_info = get_database_info()
+        
+        if db_info:
+            return jsonify({
+                'success': True,
+                'database': db_info
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Database not connected'
+            }), 503
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 if __name__ == '__main__':
-    app.run(debug=False)
+    app.run(debug=False, port=5001)

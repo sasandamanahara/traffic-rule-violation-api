@@ -1,0 +1,59 @@
+# Environment Variables
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploads and outputs
+uploads/*.mp4
+uploads/*.jpg
+uploads/*.jpeg
+uploads/*.png
+output_videos/*.mp4
+static/detected.jpg
+static/snapshots/*.jpg
+
+# Models (if large)
+# models/*.pt
+
+# Logs
+*.log
+
