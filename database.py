@@ -61,7 +61,7 @@ class Database:
     
     def get_collection(self, collection_name):
         """Get a specific collection from the database"""
-        if self.db is None or not self.connected:
+        if not self.connected or self.db is None:
             return None
         return self.db[collection_name]
     

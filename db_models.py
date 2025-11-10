@@ -52,7 +52,7 @@ class ViolationModel:
             list: List of inserted document IDs
         """
         collection = get_collection(ViolationModel.COLLECTION_NAME)
-        if not collection or not violations_list:
+        if collection is None or not violations_list:
             return []
         
         # Add timestamps and default status
