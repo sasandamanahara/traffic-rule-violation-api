@@ -326,6 +326,82 @@ class CameraModel:
         except Exception as e:
             print(f"Error retrieving active cameras: {str(e)}")
             return []
+    
+    @staticmethod
+    def get_camera_by_id(camera_id):
+        """
+        Get a camera by ID
+        
+        Args:
+            camera_id (str): Camera ID
+            
+        Returns:
+            dict: Camera document or None
+        """
+        collection = get_collection(CameraModel.COLLECTION_NAME)
+        if collection is None:
+            return None
+        
+        try:
+            from bson import ObjectId
+            camera = collection.find_one({'_id': ObjectId(camera_id)})
+            if camera:
+                camera['_id'] = str(camera['_id'])
+            return camera
+        except Exception as e:
+            print(f"Error retrieving camera: {str(e)}")
+            return None
+    
+    @staticmethod
+    def update_camera(camera_id, update_data):
+        """
+        Update a camera record
+        
+        Args:
+            camera_id (str): Camera ID
+            update_data (dict): Fields to update
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        collection = get_collection(CameraModel.COLLECTION_NAME)
+        if collection is None:
+            return False
+        
+        try:
+            from bson import ObjectId
+            update_data['updated_at'] = datetime.utcnow()
+            result = collection.update_one(
+                {'_id': ObjectId(camera_id)},
+                {'$set': update_data}
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            print(f"Error updating camera: {str(e)}")
+            return False
+    
+    @staticmethod
+    def delete_camera(camera_id):
+        """
+        Delete a camera record
+        
+        Args:
+            camera_id (str): Camera ID
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        collection = get_collection(CameraModel.COLLECTION_NAME)
+        if collection is None:
+            return False
+        
+        try:
+            from bson import ObjectId
+            result = collection.delete_one({'_id': ObjectId(camera_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            print(f"Error deleting camera: {str(e)}")
+            return False
 
 
 class AdminModel:

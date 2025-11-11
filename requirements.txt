@@ -24,3 +24,4 @@ bcrypt
 werkzeug
 boto3==1.40.69
 botocore==1.40.69
+lap>=0.5.12

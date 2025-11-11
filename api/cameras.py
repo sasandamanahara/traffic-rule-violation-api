@@ -48,3 +48,74 @@ def create_camera():
             'error': str(e)
         }), 500
 
+
+@api_bp.route('/cameras/<camera_id>', methods=['GET'])
+def get_camera(camera_id):
+    """Get a single camera by ID"""
+    try:
+        camera = CameraModel.get_camera_by_id(camera_id)
+        
+        if camera:
+            return jsonify({
+                'success': True,
+                'camera': camera
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Camera not found'
+            }), 404
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@api_bp.route('/cameras/<camera_id>', methods=['PUT'])
+def update_camera(camera_id):
+    """Update a camera record"""
+    try:
+        update_data = request.json
+        
+        success = CameraModel.update_camera(camera_id, update_data)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Camera updated successfully'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to update camera'
+            }), 400
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@api_bp.route('/cameras/<camera_id>', methods=['DELETE'])
+def delete_camera(camera_id):
+    """Delete a camera record"""
+    try:
+        success = CameraModel.delete_camera(camera_id)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Camera deleted successfully'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to delete camera'
+            }), 400
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
