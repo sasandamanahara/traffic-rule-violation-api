@@ -7,5 +7,5 @@ from flask import Blueprint
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 # Import all route modules to register them
-from . import auth, violations, cameras, health, detection
+from . import auth, violations, cameras, health, detection, reports
 
