@@ -73,7 +73,7 @@ def initialize_stream(video_source):
     mid_pt, (perp_dx, perp_dy) = perpendiculars[mid_idx]
 
     line_length = max(h, w)
-    parallel_offset = 100
+    parallel_offset = 30
     offset_vec = np.array([parallel_offset * (-perp_dy), parallel_offset * perp_dx])
 
     # -------------------- Pixel-to-meter calibration --------------------
