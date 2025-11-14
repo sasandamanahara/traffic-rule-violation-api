@@ -3,9 +3,10 @@ from ultralytics import YOLO
 from speed_detection import calculate_speed
 from helmet_triple_detection import check_helmet_triple
 import numpy as np
+from direction_detection import check_vehicle_direction
 
 # ------------------- Main Detection ------------------- #
-def detect_vehicles(video_source, calibration):
+def detect_vehicles(video_source, calibration, vehicle_directions):
     model_vehicle = YOLO("../models/new best.pt")
     PIXELS_PER_METER = float(calibration.get("pixels_per_meter", 1.0))
     lines = calibration.get("lines", [])
@@ -49,6 +50,15 @@ def detect_vehicles(video_source, calibration):
                 )
 
                 last_positions[obj_id] = (cx, cy)
+
+                if vehicle_directions is not None:
+                    if vehicle_directions==12:
+                        vehicle_directions_list=[1,2]
+                    if vehicle_directions==21:
+                        vehicle_directions_list=[2,1]
+
+                    check_vehicle_direction(obj_id, cy, lines, vehicle_directions_list,frame,box,original_frame)
+
 
             # --- Helmet/triple riding detection ---
             motor_boxes = []
