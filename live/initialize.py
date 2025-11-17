@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from ultralytics import YOLO
+from red_light_violation.redlight_initialize import detect_traffic_light_and_line
 
 def initialize_stream(video_source):
     """
@@ -20,6 +21,13 @@ def initialize_stream(video_source):
     first_frame = None
 
     print("[INFO] Observing motion for calibration...")
+    
+    traffic_light_result = detect_traffic_light_and_line(video_source)
+
+    traffic_light_box = traffic_light_result["traffic_light_box"]
+    traffic_light_line = traffic_light_result["traffic_light_line"]
+
+
     while frame_idx < frame_limit:
         ret, frame = cap.read()
         if not ret:
@@ -75,6 +83,7 @@ def initialize_stream(video_source):
     line_length = max(h, w)
     parallel_offset = 30
     offset_vec = np.array([parallel_offset * (-perp_dy), parallel_offset * perp_dx])
+
 
     # -------------------- Pixel-to-meter calibration --------------------
     print("[INFO] Starting pixel-to-meter calibration...")
@@ -133,11 +142,14 @@ def initialize_stream(video_source):
         lines_pts.append((p1, p2))
 
     print("[INFO] Calibration completed.")
+
     calibration = {
         "pixels_per_meter": PIXELS_PER_METER,
         "lines": lines_pts,
         "frame_time": frame_time,
-        "frame_size": (w, h)
+        "frame_size": (w, h),
+        "traffic_light_box": traffic_light_box,
+        "traffic_light_line": traffic_light_line
     }
 
     return calibration
