@@ -113,11 +113,6 @@ def track_vehicle_line_order(video_source, calibration, frame_limit=300):
         isDirection = False
         direction = None
 
-    # print("direction12:", direction12)
-    # print("direction21:", direction21)
-    # print("isDirection:", isDirection)
-    # print("direction:", direction)
-
     return {
         "vehicle_data": vehicle_data,
         "direction12": direction12,
