@@ -2,6 +2,69 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 from red_light_violation.redlight_initialize import detect_traffic_light_and_line
+import threading
+import time
+
+class RTSPStream:
+    def __init__(self, url, retry_delay=2.0):
+        self.url = url
+        self.retry_delay = retry_delay
+        self.cap = None
+        self.ret = False
+        self.frame = None
+        self.stopped = False
+        self.lock = threading.Lock()
+        self.connected = False
+        self.thread = threading.Thread(target=self.update, daemon=True)
+        self.thread.start()
+
+    def connect(self):
+        if self.cap:
+            self.cap.release()
+        try:
+            self.cap = cv2.VideoCapture(self.url)
+            if not self.cap.isOpened():
+                print(f"[ERROR] Cannot connect to {self.url}")
+                self.connected = False
+                return False
+            print(f"[INFO] Connected to {self.url}")
+            self.connected = True
+            return True
+        except Exception as e:
+            print(f"[EXCEPTION] during connect: {e}")
+            self.connected = False
+            return False
+
+    def update(self):
+        while not self.stopped:
+            if self.cap is None or not self.cap.isOpened():
+                if not self.connect():
+                    time.sleep(self.retry_delay)
+                    continue
+
+            ret, frame = self.cap.read()
+            if not ret or frame is None:
+                print("[WARN] Failed to grab frame. Reconnecting...")
+                if self.cap:
+                    self.cap.release()
+                self.cap = None
+                self.connected = False
+                time.sleep(self.retry_delay)
+                continue
+
+            with self.lock:
+                self.ret = ret
+                self.frame = frame
+
+    def read(self):
+        with self.lock:
+            return self.ret, self.frame
+
+    def stop(self):
+        self.stopped = True
+        self.thread.join()
+        if self.cap:
+            self.cap.release()
 
 def initialize_stream(video_source):
     """
@@ -9,6 +72,16 @@ def initialize_stream(video_source):
     and performs pixel-to-meter calibration automatically using car width.
     Returns calibration data for later use.
     """
+
+    # ---------------- START STREAM ---------------- #
+    stream = RTSPStream(video_source)
+
+    # Wait until stream is connected before initialization
+    print("[APP] Waiting for stream to connect...")
+    while not stream.connected:
+        time.sleep(0.5)
+
+
     print("[INFO] Loading YOLO model...")
     model = YOLO("yolov8n.pt")
     cap = cv2.VideoCapture(video_source)
@@ -17,11 +90,11 @@ def initialize_stream(video_source):
 
     paths = {}
     frame_idx = 0
-    frame_limit = 80
+    frame_limit = 400
     first_frame = None
 
     print("[INFO] Observing motion for calibration...")
-    
+
     traffic_light_result = detect_traffic_light_and_line(video_source)
 
     traffic_light_box = traffic_light_result["traffic_light_box"]
@@ -29,30 +102,39 @@ def initialize_stream(video_source):
 
 
     while frame_idx < frame_limit:
-        ret, frame = cap.read()
-        if not ret:
-            break
+        ret, frame = stream.read()
+        if not ret or frame is None:
+            continue  # keep waiting for frames
+
         frame_idx += 1
         if first_frame is None:
             first_frame = frame.copy()
 
         results = model.track(frame, persist=True, verbose=False)
+
         if results and results[0].boxes.id is not None:
             boxes = results[0].boxes.xyxy.cpu().numpy()
             ids = results[0].boxes.id.cpu().numpy()
             classes = results[0].boxes.cls.cpu().numpy()
+
             for box, obj_id, cls in zip(boxes, ids, classes):
-                if int(cls) in [2, 3, 5, 7]:  # car, motorbike, bus, truck
-                    x1, y1, x2, y2 = box
-                    cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+                if int(cls) in [2, 3, 5, 7]:
+                    x1, y1, x2, y2 = map(int, box)
+                    cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
                     paths.setdefault(obj_id, []).append((cx, cy))
 
-    cap.release()
+        cv2.imshow("Motion Observation", frame)
+        if cv2.waitKey(1) & 0xFF == 27:
+            break
+
+    cv2.destroyAllWindows()
+
 
     # Compute motion lines
     motion_lines = []
+    print(len(paths))
     for obj_id, points in paths.items():
-        if len(points) >= 5:
+        if len(points) >= 2:
             start = np.array(points[0])
             end = np.array(points[-1])
             motion_lines.append((start, end))
@@ -94,19 +176,13 @@ def initialize_stream(video_source):
 
     # Load YOLO
     model = YOLO("yolov8n.pt")
-    cap = cv2.VideoCapture(video_source)
-
-    # Define fixed vertical lines for calibration
-    ret, frame = cap.read()
-    if not ret:
-        raise Exception("Cannot read video")
 
     h, w, _ = frame.shape
     LINE_X1 = int(w * 0.35)
     LINE_X2 = int(w * 0.65)
 
     while len(pixel_per_meter_values) < SAMPLE_CARS:
-        ret, frame = cap.read()
+        ret, frame = stream.read()
         if not ret:
             break
 
@@ -142,7 +218,7 @@ def initialize_stream(video_source):
         lines_pts.append((p1, p2))
 
     print("[INFO] Calibration completed.")
-
+    stream.stop()
     calibration = {
         "pixels_per_meter": PIXELS_PER_METER,
         "lines": lines_pts,

@@ -5,15 +5,87 @@ from helmet_triple_detection import check_helmet_triple
 import numpy as np
 from direction_detection import check_vehicle_direction
 from red_light_violation.utils import detect_traffic_light_state, draw_violation_line, ensure_dir
-
+import threading
+import time
 import os
 
 VIOLATION_OUTPUT_DIR = "violations/red_light"
 LIGHT_HISTORY_LEN = 5
 ensure_dir(VIOLATION_OUTPUT_DIR)
 
+
+class RTSPStream:
+    def __init__(self, url, retry_delay=2.0):
+        self.url = url
+        self.retry_delay = retry_delay
+        self.cap = None
+        self.ret = False
+        self.frame = None
+        self.stopped = False
+        self.lock = threading.Lock()
+        self.connected = False
+        self.thread = threading.Thread(target=self.update, daemon=True)
+        self.thread.start()
+
+    def connect(self):
+        if self.cap:
+            self.cap.release()
+        try:
+            self.cap = cv2.VideoCapture(self.url)
+            if not self.cap.isOpened():
+                print(f"[ERROR] Cannot connect to {self.url}")
+                self.connected = False
+                return False
+            print(f"[INFO] Connected to {self.url}")
+            self.connected = True
+            return True
+        except Exception as e:
+            print(f"[EXCEPTION] during connect: {e}")
+            self.connected = False
+            return False
+
+    def update(self):
+        while not self.stopped:
+            if self.cap is None or not self.cap.isOpened():
+                if not self.connect():
+                    time.sleep(self.retry_delay)
+                    continue
+
+            ret, frame = self.cap.read()
+            if not ret or frame is None:
+                print("[WARN] Failed to grab frame. Reconnecting...")
+                if self.cap:
+                    self.cap.release()
+                self.cap = None
+                self.connected = False
+                time.sleep(self.retry_delay)
+                continue
+
+            with self.lock:
+                self.ret = ret
+                self.frame = frame
+
+    def read(self):
+        with self.lock:
+            return self.ret, self.frame
+
+    def stop(self):
+        self.stopped = True
+        self.thread.join()
+        if self.cap:
+            self.cap.release()
+
+
 # ------------------- Main Detection ------------------- #
 def detect_vehicles(video_source, calibration, vehicle_directions):
+
+    stream = RTSPStream(video_source)
+
+    # Wait until stream is connected before initialization
+    print("[APP] Waiting for stream to connect...")
+    while not stream.connected:
+        time.sleep(0.5)
+
     model_vehicle = YOLO("../models/new best.pt")
     PIXELS_PER_METER = float(calibration.get("pixels_per_meter", 1.0))
     traffic_light_box = calibration.get("traffic_light_box", None)
@@ -26,10 +98,6 @@ def detect_vehicles(video_source, calibration, vehicle_directions):
         return
 
     line1, line2 = lines
-    cap = cv2.VideoCapture(video_source)
-    if not cap.isOpened():
-        print("[ERROR] Cannot open video:", video_source)
-        return
 
     last_positions = {}
     speeds = {}
@@ -38,7 +106,7 @@ def detect_vehicles(video_source, calibration, vehicle_directions):
     
 
     while True:
-        ret, frame = cap.read()
+        ret, frame = stream.read()
         if not ret:
             break
         frame_idx += 1
@@ -140,7 +208,8 @@ def detect_vehicles(video_source, calibration, vehicle_directions):
         # Display frame
         cv2.imshow("Vehicle + Speed + RLVD", frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
+            stream.stop()
             break
 
-    cap.release()
+    stream.release()
     cv2.destroyAllWindows()
