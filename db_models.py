@@ -402,6 +402,29 @@ class CameraModel:
         except Exception as e:
             print(f"Error deleting camera: {str(e)}")
             return False
+    
+    @staticmethod
+    def update_camera_stream_status(camera_id, stream_id, status):
+        """
+        Update camera stream status
+        
+        Args:
+            camera_id (str): Camera ID
+            stream_id (str): Stream ID or None
+            status (str): Stream status
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        update_data = {
+            'stream_id': stream_id,
+            'updated_at': datetime.utcnow()
+        }
+        
+        if stream_id:
+            update_data['last_stream_started'] = datetime.utcnow()
+        
+        return CameraModel.update_camera(camera_id, update_data)
 
 
 class AdminModel:

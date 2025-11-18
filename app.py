@@ -18,15 +18,6 @@ CORS(app,
      expose_headers=Config.CORS_EXPOSE_HEADERS,
      supports_credentials=Config.CORS_SUPPORTS_CREDENTIALS)
 
-# Add after_request handler to ensure CORS headers are always set
-@app.after_request
-def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', ','.join(Config.CORS_ALLOW_HEADERS))
-    response.headers.add('Access-Control-Allow-Methods', ','.join(Config.CORS_METHODS))
-    response.headers.add('Access-Control-Max-Age', str(Config.CORS_MAX_AGE))
-    return response
-
 # Initialize database connection
 db = get_db()
 
