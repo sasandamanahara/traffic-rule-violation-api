@@ -6,15 +6,18 @@ import threading
 import time
 
 class RTSPStream:
-    def __init__(self, url, retry_delay=2.0):
+    def __init__(self, url, retry_delay=2.0, max_retries=5):
         self.url = url
         self.retry_delay = retry_delay
+        self.max_retries = max_retries
+        self.retry_count = 0
         self.cap = None
         self.ret = False
         self.frame = None
         self.stopped = False
         self.lock = threading.Lock()
         self.connected = False
+        self.connection_failed = False
         self.thread = threading.Thread(target=self.update, daemon=True)
         self.thread.start()
 
@@ -22,29 +25,57 @@ class RTSPStream:
         if self.cap:
             self.cap.release()
         try:
-            self.cap = cv2.VideoCapture(self.url)
+            # Create VideoCapture with appropriate backend for RTSP/RTMP
+            if self.url.startswith('rtsp://') or self.url.startswith('rtmp://'):
+                # Use FFMPEG backend for network streams
+                self.cap = cv2.VideoCapture(self.url, cv2.CAP_FFMPEG)
+                # Set timeout for network connections
+                self.cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 10000)  # 10 second timeout
+                # For RTMP, also set buffer size
+                if self.url.startswith('rtmp://'):
+                    self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Reduce latency
+            else:
+                # Local file
+                self.cap = cv2.VideoCapture(self.url)
+            
             if not self.cap.isOpened():
-                print(f"[ERROR] Cannot connect to {self.url}")
+                self.retry_count += 1
+                if self.retry_count >= self.max_retries:
+                    protocol = 'RTSP' if self.url.startswith('rtsp://') else 'RTMP' if self.url.startswith('rtmp://') else 'video source'
+                    print(f"[ERROR] Cannot connect to {protocol} stream: {self.url} after {self.max_retries} attempts")
+                    self.connected = False
+                    self.connection_failed = True
+                    return False
+                if self.retry_count % 5 == 0:  # Log every 5th attempt
+                    print(f"[WARN] Connection attempt {self.retry_count}/{self.max_retries} failed for {self.url}")
                 self.connected = False
                 return False
             print(f"[INFO] Connected to {self.url}")
             self.connected = True
+            self.retry_count = 0  # Reset on successful connection
             return True
         except Exception as e:
+            self.retry_count += 1
             print(f"[EXCEPTION] during connect: {e}")
+            if self.retry_count >= self.max_retries:
+                self.connection_failed = True
             self.connected = False
             return False
 
     def update(self):
-        while not self.stopped:
+        while not self.stopped and not self.connection_failed:
             if self.cap is None or not self.cap.isOpened():
                 if not self.connect():
+                    if self.connection_failed:
+                        break
                     time.sleep(self.retry_delay)
                     continue
 
             ret, frame = self.cap.read()
             if not ret or frame is None:
-                print("[WARN] Failed to grab frame. Reconnecting...")
+                # Only log warning occasionally to reduce spam
+                if self.retry_count % 10 == 0:
+                    print("[WARN] Failed to grab frame. Reconnecting...")
                 if self.cap:
                     self.cap.release()
                 self.cap = None
@@ -74,12 +105,20 @@ def initialize_stream(video_source):
     """
 
     # ---------------- START STREAM ---------------- #
-    stream = RTSPStream(video_source)
+    stream = RTSPStream(video_source, max_retries=5)
 
-    # Wait until stream is connected before initialization
+    # Wait until stream is connected before initialization (with timeout)
     print("[APP] Waiting for stream to connect...")
-    while not stream.connected:
+    max_wait_time = 30  # 30 seconds max wait
+    wait_count = 0
+    while not stream.connected and not stream.connection_failed and wait_count < max_wait_time:
         time.sleep(0.5)
+        wait_count += 1
+    
+    if stream.connection_failed or not stream.connected:
+        print(f"[ERROR] Failed to connect to {video_source} after {max_wait_time} seconds")
+        stream.stop()
+        return None
 
 
     print("[INFO] Loading YOLO model...")
@@ -123,11 +162,20 @@ def initialize_stream(video_source):
                     cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
                     paths.setdefault(obj_id, []).append((cx, cy))
 
-        cv2.imshow("Motion Observation", frame)
-        if cv2.waitKey(1) & 0xFF == 27:
-            break
+        # Try to display frame (may fail in headless environments)
+        try:
+            cv2.imshow("Motion Observation", frame)
+            if cv2.waitKey(1) & 0xFF == 27:
+                break
+        except cv2.error:
+            # Running in headless environment, skip display
+            pass
 
-    cv2.destroyAllWindows()
+    # Try to close windows (may fail in headless environments)
+    try:
+        cv2.destroyAllWindows()
+    except cv2.error:
+        pass
 
 
     # Compute motion lines

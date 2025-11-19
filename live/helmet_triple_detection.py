@@ -2,9 +2,13 @@ from ultralytics import YOLO
 import cv2
 import os
 
-# Load your models
-model_helmet = YOLO("../models/Helmet_Detection.pt")
-model_triple = YOLO("../models/Triple_Riding_Detection.pt")  # your triple riding model
+# Get absolute path to models directory
+current_dir = os.path.dirname(os.path.abspath(__file__))
+models_dir = os.path.join(os.path.dirname(current_dir), "models")
+
+# Load your models with absolute paths
+model_helmet = YOLO(os.path.join(models_dir, "Helmet_Detection.pt"))
+model_triple = YOLO(os.path.join(models_dir, "Triple_Riding_Detection.pt"))  # your triple riding model
 
 def check_helmet_triple(obj_id, crop, frame,original_frame, x1, y1, x2, y2):
     """

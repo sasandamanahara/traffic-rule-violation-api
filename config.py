@@ -40,3 +40,4 @@ class Config:
     CORS_SUPPORTS_CREDENTIALS = False
     CORS_MAX_AGE = 3600
 
+

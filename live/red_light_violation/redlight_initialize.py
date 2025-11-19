@@ -81,8 +81,8 @@ def detect_traffic_light_and_line(video_source, num_frames=20):
     """
     print("[INFO] Detecting traffic light box & violation line...")
 
-    # if video_source looks like RTSP, use threaded stream
-    if video_source.startswith("rtmp://"):
+    # if video_source looks like RTSP or RTMP, use threaded stream
+    if video_source.startswith("rtmp://") or video_source.startswith("rtsp://"):
         stream = RTSPStream(video_source)
 
         print("[INFO] Waiting for stream to connect...")

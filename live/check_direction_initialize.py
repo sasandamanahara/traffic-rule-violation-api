@@ -78,13 +78,22 @@ def track_vehicle_line_order(video_source, calibration, frame_limit=300):
             line_color = (0, 0, 255)  # red
             cv2.line(frame, p1, p2, line_color, 2)
 
-        cv2.imshow("Vehicle Line Crossing", frame)
-        key = cv2.waitKey(1)
-        if key == 27:
-            break
+        # Try to display frame (may fail in headless environments)
+        try:
+            cv2.imshow("Vehicle Line Crossing", frame)
+            key = cv2.waitKey(1)
+            if key == 27:
+                break
+        except cv2.error:
+            # Running in headless environment, skip display
+            pass
 
     cap.release()
-    cv2.destroyAllWindows()
+    # Try to close windows (may fail in headless environments)
+    try:
+        cv2.destroyAllWindows()
+    except cv2.error:
+        pass
 
     # --- Determine direction summary ---
     direction12 = []

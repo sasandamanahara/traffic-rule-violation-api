@@ -129,3 +129,4 @@ def get_violation_stats():
             'error': str(e)
         }), 500
 
+
