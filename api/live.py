@@ -34,16 +34,31 @@ def start_live_detection():
         
         # Initialize calibration
         print(f"[API] Initializing calibration for {video_source}...")
-        calibration = initialize_stream(video_source)
+        try:
+            calibration = initialize_stream(video_source)
+        except Exception as init_err:
+            error_msg = f'Error initializing stream: {str(init_err)}'
+            print(f"[ERROR] {error_msg}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'error': error_msg}), 500
         
         if not calibration:
-            error_msg = f'Failed to connect to video source: {video_source}. Please verify the RTSP URL is correct and the stream is accessible.'
-            return jsonify({'error': error_msg}), 500
+            error_msg = f'Failed to connect to video source: {video_source}. Please verify the RTSP/RTMP URL is correct and the stream is accessible.'
+            print(f"[ERROR] {error_msg}")
+            return jsonify({'error': error_msg}), 400  # Changed to 400 (Bad Request) instead of 500
         
         # Get vehicle direction data
         print("[API] Tracking vehicle directions...")
-        vehicle_data = track_vehicle_line_order(video_source, calibration)
-        vehicle_directions = vehicle_data.get('direction')
+        try:
+            vehicle_data = track_vehicle_line_order(video_source, calibration)
+            vehicle_directions = vehicle_data.get('direction') if vehicle_data else None
+        except Exception as dir_err:
+            print(f"[WARN] Error tracking vehicle directions: {dir_err}")
+            import traceback
+            traceback.print_exc()
+            # Continue without direction data - detection can still work
+            vehicle_directions = None
         
         # Start detection
         result = service.start_detection(video_source, calibration, vehicle_directions)
@@ -113,6 +128,42 @@ def live_stream():
     )
 
 
+def convert_to_json_serializable(obj):
+    """Convert numpy types and other non-serializable objects to JSON-compatible types"""
+    import numpy as np
+    
+    # Handle None first
+    if obj is None:
+        return None
+    
+    # Handle numpy types - check for numpy scalars first
+    if isinstance(obj, np.generic):
+        # This catches all numpy scalar types (float32, int64, etc.)
+        return obj.item()  # Convert numpy scalar to Python native type
+    
+    # Handle numpy arrays
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    
+    # Handle standard Python types
+    if isinstance(obj, (str, int, float, bool)):
+        return obj
+    
+    # Handle collections
+    if isinstance(obj, dict):
+        return {key: convert_to_json_serializable(value) for key, value in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [convert_to_json_serializable(item) for item in obj]
+    
+    # Fallback: try to convert to string or use item() if it's a numpy type
+    try:
+        if hasattr(obj, 'item'):
+            return obj.item()
+        return str(obj)
+    except:
+        return None
+
+
 @api_bp.route('/live/violations', methods=['GET'])
 def get_live_violations():
     """Get recent violations from live detection"""
@@ -121,26 +172,38 @@ def get_live_violations():
         limit = request.args.get('limit', 50, type=int)
         
         violations = service.get_violations(limit=limit)
+        print(f"[DEBUG] Retrieved {len(violations)} violations from service")
         
         # Convert image data to base64 for JSON response
         violations_json = []
         for v in violations:
-            violation_data = {
-                'id': v['id'],
-                'type': v['type'],
-                'vehicle_id': v['vehicle_id'],
-                'timestamp': v['timestamp'],
-                'bbox': v['bbox'],
-                'metadata': v['metadata']
-            }
-            
-            # Add base64 encoded image if available
-            if 'image_data' in v:
-                img_base64 = base64.b64encode(v['image_data']).decode('utf-8')
-                violation_data['image'] = f"data:image/jpeg;base64,{img_base64}"
-            
-            violations_json.append(violation_data)
+            try:
+                # Convert entire violation object recursively to ensure all numpy types are converted
+                violation_data = convert_to_json_serializable({
+                    'id': v.get('id'),
+                    'type': v.get('type'),
+                    'vehicle_id': v.get('vehicle_id'),
+                    'timestamp': v.get('timestamp'),
+                    'bbox': v.get('bbox'),
+                    'metadata': v.get('metadata', {})
+                })
+                
+                # Add base64 encoded image if available
+                if 'image_data' in v and v['image_data'] is not None:
+                    try:
+                        img_base64 = base64.b64encode(v['image_data']).decode('utf-8')
+                        violation_data['image'] = f"data:image/jpeg;base64,{img_base64}"
+                    except Exception as img_err:
+                        print(f"[WARN] Error encoding image for violation {v.get('id')}: {img_err}")
+                
+                violations_json.append(violation_data)
+            except Exception as v_err:
+                print(f"[WARN] Error processing violation: {v_err}, violation data: {v}")
+                import traceback
+                traceback.print_exc()
+                continue
         
+        print(f"[DEBUG] Returning {len(violations_json)} violations to client")
         return jsonify({
             'success': True,
             'violations': violations_json,
@@ -149,7 +212,9 @@ def get_live_violations():
     
     except Exception as e:
         print(f"[ERROR] Error getting violations: {e}")
-        return jsonify({'error': str(e)}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e), 'success': False}), 500
 
 
 @api_bp.route('/live/status', methods=['GET'])
