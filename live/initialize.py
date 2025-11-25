@@ -17,15 +17,28 @@ def initialize_stream(video_source):
 
     paths = {}
     frame_idx = 0
-    frame_limit = 80
+    if video_source==("tr.m4v"):
+        frame_limit = 120
+    else:
+        frame_limit = 700
     first_frame = None
 
     print("[INFO] Observing motion for calibration...")
     
     traffic_light_result = detect_traffic_light_and_line(video_source)
 
-    traffic_light_box = traffic_light_result["traffic_light_box"]
-    traffic_light_line = traffic_light_result["traffic_light_line"]
+    traffic_light_box, traffic_light_line = traffic_light_result
+
+# If box is None and line is any integer → set both to None
+    if traffic_light_box is None and isinstance(traffic_light_line, int):
+        traffic_light_box = None
+        traffic_light_line = None
+    else:
+        traffic_light_box = traffic_light_result["traffic_light_box"]
+        traffic_light_line = traffic_light_result["traffic_light_line"]
+
+    print(traffic_light_box)
+    print(traffic_light_line)
 
 
     while frame_idx < frame_limit:

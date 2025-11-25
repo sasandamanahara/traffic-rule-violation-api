@@ -3,8 +3,8 @@ from check_direction_initialize import track_vehicle_line_order
 from vehicle_detection import detect_vehicles
 
 if __name__ == "__main__":
-    video_source = "tr.mp4"  # or RTSP URL
-
+    # video_source = "tr.m4v"  # or RTSP URL
+    video_source = "5.mp4"  # or RTSP URL
     print("[APP] Starting initialization...")
     calibration = initialize_stream(video_source)
 
