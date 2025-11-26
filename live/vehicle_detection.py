@@ -199,10 +199,10 @@ def detect_vehicles(video_source, calibration, vehicle_directions):
                 if "motor" in label:
                     motor_boxes.append(box)
                     motor_ids.append(obj_id)
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
+                    # cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
                 elif "rider" in label:
                     rider_boxes.append(box)
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 255), 2)
+                    # cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 255), 2)
 
             for i, motor_box in enumerate(motor_boxes):
                 x1, y1, x2, y2 = map(int, motor_box)
@@ -233,9 +233,9 @@ def detect_vehicles(video_source, calibration, vehicle_directions):
                 cv2.imwrite(os.path.join(VIOLATION_OUTPUT_DIR, f"violation_{frame_idx}_{vid_str}.jpg"), crop)
 
             color = (0,0,255) if obj["crossed"] else (0,255,0)
-            cv2.rectangle(frame, (x1,y1), (x2,y2), color, 2)
-            if obj["id"] is not None:
-                cv2.putText(frame, f"ID:{obj['id']}", (x1,y1-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            # cv2.rectangle(frame, (x1,y1), (x2,y2), color, 2)
+            # if obj["id"] is not None:
+            #     cv2.putText(frame, f"ID:{obj['id']}", (x1,y1-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
         # --- Draw calibration lines ---
         for p1, p2 in lines:
@@ -410,10 +410,10 @@ def detect_vehicles_streaming(video_source, calibration, vehicle_directions,
                 if "motor" in label:
                     motor_boxes.append(box)
                     motor_ids.append(obj_id)
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
+                    # cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
                 elif "rider" in label:
                     rider_boxes.append(box)
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 255), 2)
+                    # cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 255), 2)
             
             for i, motor_box in enumerate(motor_boxes):
                 x1, y1, x2, y2 = map(int, motor_box)
