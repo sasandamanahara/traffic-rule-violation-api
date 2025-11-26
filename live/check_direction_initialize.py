@@ -3,7 +3,11 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
-def track_vehicle_line_order(video_source, calibration, frame_limit=300):
+def track_vehicle_line_order(video_source, calibration, frame_limit=700):
+    if video_source==("tr.m4v"):
+        frame_limit = 100
+    else:
+        frame_limit = 700
     """
     Tracks vehicles and records the sequence of line crossings.
     Crossing is detected based purely on side change of the vehicle center
@@ -13,6 +17,7 @@ def track_vehicle_line_order(video_source, calibration, frame_limit=300):
     model = YOLO("yolov8n.pt")
     cap = cv2.VideoCapture(video_source)
     lines = calibration["lines"]  # list of line points [(p1, p2), ...]
+    print(lines)
 
     vehicle_data = {}  # obj_id: {"crossed_seq": [], "positions": [], "last_side": []}
     frame_idx = 0
@@ -26,6 +31,10 @@ def track_vehicle_line_order(video_source, calibration, frame_limit=300):
         results = model.track(frame, persist=True, verbose=False)
         if results and len(results[0].boxes) > 0:
             boxes = results[0].boxes.xyxy.cpu().numpy()
+
+            # Handle None IDs
+            if results[0].boxes.id is None:
+                continue  # skip this frame because no tracking IDs were assigned
             ids = results[0].boxes.id.cpu().numpy()
             classes = results[0].boxes.cls.cpu().numpy()
 
