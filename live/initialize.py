@@ -21,19 +21,25 @@ class RTSPStream:
     def connect(self):
         if self.cap:
             self.cap.release()
-        try:
-            self.cap = cv2.VideoCapture(self.url)
-            if not self.cap.isOpened():
-                print(f"[ERROR] Cannot connect to {self.url}")
-                self.connected = False
-                return False
-            print(f"[INFO] Connected to {self.url}")
-            self.connected = True
-            return True
-        except Exception as e:
-            print(f"[EXCEPTION] during connect: {e}")
+
+        for attempt in range(1, 11):  # Try up to 10 times
+            try:
+                self.cap = cv2.VideoCapture(self.url)
+                if self.cap.isOpened():
+                    print(f"[INFO] Connected to {self.url} on attempt {attempt}")
+                    self.connected = True
+                    return True
+                else:
+                    print(f"[WARN] Attempt {attempt}: Cannot connect to {self.url}. Retrying in 1s...")
+            except Exception as e:
+                print(f"[EXCEPTION] Attempt {attempt}: {e}")
+            
             self.connected = False
-            return False
+            time.sleep(1)  # wait 1 second before retry
+
+        print(f"[ERROR] Failed to connect to {self.url} after 10 attempts")
+        return False
+
 
     def update(self):
         while not self.stopped:
@@ -95,10 +101,20 @@ def initialize_stream(video_source):
 
     print("[INFO] Observing motion for calibration...")
 
+
+
     traffic_light_result = detect_traffic_light_and_line(video_source)
 
-    traffic_light_box = traffic_light_result["traffic_light_box"]
-    traffic_light_line = traffic_light_result["traffic_light_line"]
+    traffic_light_box, traffic_light_line = traffic_light_result
+
+    # If box is None and line is any integer → set both to None
+    if traffic_light_box is None and isinstance(traffic_light_line, int):
+        traffic_light_box = None
+        traffic_light_line = None
+    else:
+        traffic_light_box = traffic_light_result["traffic_light_box"]
+        traffic_light_line = traffic_light_result["traffic_light_line"]
+
 
 
     while frame_idx < frame_limit:
