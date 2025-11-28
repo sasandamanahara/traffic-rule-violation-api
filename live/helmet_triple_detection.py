@@ -13,7 +13,7 @@ def check_helmet_triple(obj_id, crop, frame, original_frame, x1, y1, x2, y2, cov
     - Helmet: checks how much of helmet is inside rider box
     """
     # --- Triple riding check on full frame ---
-    results_triple = model_triple(original_frame, conf=0.75)[0]
+    results_triple = model_triple(original_frame, conf=0.7)[0]
     for box, conf in zip(results_triple.boxes.xyxy, results_triple.boxes.conf.cpu().numpy()):
         tx1, ty1, tx2, ty2 = map(int, box)
         triple_area = (tx2 - tx1) * (ty2 - ty1)
@@ -32,6 +32,19 @@ def check_helmet_triple(obj_id, crop, frame, original_frame, x1, y1, x2, y2, cov
         if triple_covered_ratio >= coverage_threshold:
             text = f"Triple Riding! conf:{conf:.6f} ratio:{triple_covered_ratio:.2f}"
             color = (0, 255, 0)
+        elif inter_area > 0:
+            text = f"TRIPLE RIDING! conf:{conf:.3f} ratio:{triple_covered_ratio:.2f}"
+            color = (0, 0, 255)
+        else:
+            text = f"ERROR TRIPLE! conf:{conf:.3f} ratio:{triple_covered_ratio:.2f}"
+            color = (0, 0, 255)
+
+        # Draw on frame
+        cv2.putText(frame, text, (x1, y1 - 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+
+        # Save violation if overlap insufficient
+        if obj_id is not None and triple_covered_ratio >= coverage_threshold:
             triple_folder = os.path.join("violations", "triple_riding", f"ID_{obj_id}")
             os.makedirs(triple_folder, exist_ok=True)
             crop_copy = crop.copy()
@@ -41,34 +54,7 @@ def check_helmet_triple(obj_id, crop, frame, original_frame, x1, y1, x2, y2, cov
             cv2.putText(frame_copy, text, (x1, y1 - 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
             cv2.rectangle(frame_copy, (x1, y1), (x2, y2), color, 2)
             cv2.imwrite(os.path.join(triple_folder, f"triple_violation_full_frame_conf{conf:.2f}.jpg"), frame_copy)
-        # elif inter_area > 0:
-        #     text = f"TRIPLE RIDING! conf:{conf:.3f} ratio:{triple_covered_ratio:.2f}"
-        #     color = (0, 0, 255)
-        #     triple_folder = os.path.join("violations", "triple_riding", f"ID_{obj_id}")
-        #     os.makedirs(triple_folder, exist_ok=True)
-        #     crop_copy = crop.copy()
-        #     if crop_copy.size > 0:
-        #         cv2.imwrite(os.path.join(triple_folder, f"triple_violation_conf{conf:.2f}.jpg"), crop_copy)
-        #     frame_copy = original_frame.copy()
-        #     cv2.putText(frame_copy, text, (x1, y1 - 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-        #     cv2.rectangle(frame_copy, (x1, y1), (x2, y2), color, 2)
-        #     cv2.imwrite(os.path.join(triple_folder, f"triple_violation_full_frame_conf{conf:.2f}.jpg"), frame_copy)
-        # else:
-        #     text = f"ERROR TRIPLE! conf:{conf:.3f} ratio:{triple_covered_ratio:.2f}"
-        #     color = (0, 0, 255)
-        #     triple_folder = os.path.join("violations", "triple_riding", f"ID_{obj_id}")
-        #     os.makedirs(triple_folder, exist_ok=True)
-        #     crop_copy = crop.copy()
-        #     if crop_copy.size > 0:
-        #         cv2.imwrite(os.path.join(triple_folder, f"triple_violation_conf{conf:.2f}.jpg"), crop_copy)
-        #     frame_copy = original_frame.copy()
-        #     cv2.putText(frame_copy, text, (x1, y1 - 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-        #     cv2.rectangle(frame_copy, (x1, y1), (x2, y2), color, 2)
-        #     cv2.imwrite(os.path.join(triple_folder, f"triple_violation_full_frame_conf{conf:.2f}.jpg"), frame_copy)
 
-        # # Draw on frame
-        # cv2.putText(frame, text, (x1, y1 - 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-        # cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
 
     # --- Helmet check on full frame ---
     results_helmet = model_helmet(original_frame, conf=0.615)[0]
