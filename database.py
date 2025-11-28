@@ -20,8 +20,8 @@ class Database:
     def connect(self):
         """Establish connection to MongoDB"""
         try:
-            mongodb_uri = os.getenv('MONGODB_URI')
-            database_name = os.getenv('DATABASE_NAME', 'traffic_violations')
+            mongodb_uri = "mongodb+srv://nipunikumudika:nipunikumudika@cluster0.txmga7v.mongodb.net/fyp?retryWrites=true&w=majority"
+            database_name = os.getenv('DATABASE_NAME', 'fyp')
             
             if not mongodb_uri or mongodb_uri == 'mongodb+srv://username:password@cluster0.xxxxx.mongodb.net/traffic_violations?retryWrites=true&w=majority':
                 print("⚠️  WARNING: MongoDB URI not configured. Using local storage fallback.")

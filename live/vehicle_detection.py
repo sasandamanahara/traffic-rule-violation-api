@@ -296,7 +296,10 @@ def detect_vehicles_streaming(video_source, calibration, vehicle_directions,
     model_vehicle = YOLO(model_path)
     PIXELS_PER_METER = float(calibration.get("pixels_per_meter", 1.0))
     traffic_light_box = calibration.get("traffic_light_box", None)
-    violation_line_y = calibration.get("traffic_light_line", None)
+    if traffic_light_box is None:
+        violation_line_y = None
+    else:
+        violation_line_y = calibration.get("traffic_light_line", None)
     lines = calibration.get("lines", [])
     frame_time = float(calibration.get("frame_time", 0.033))
     
@@ -410,10 +413,10 @@ def detect_vehicles_streaming(video_source, calibration, vehicle_directions,
                 if "motor" in label:
                     motor_boxes.append(box)
                     motor_ids.append(obj_id)
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
+                    # cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
                 elif "rider" in label:
                     rider_boxes.append(box)
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 255), 2)
+                    # cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 255), 2)
             
             for i, motor_box in enumerate(motor_boxes):
                 x1, y1, x2, y2 = map(int, motor_box)
@@ -426,7 +429,7 @@ def detect_vehicles_streaming(video_source, calibration, vehicle_directions,
                         has_rider_overlap = True
                 if has_rider_overlap:
                     crop = original_frame[y1:y2, x1:x2]
-                    helmet_violation, triple_violation = check_helmet_triple_streaming(
+                    helmet_violation,triple_violation = check_helmet_triple(
                         motor_ids[i], crop, frame, original_frame, x1, y1, x2, y2
                     )
                     
@@ -475,11 +478,6 @@ def detect_vehicles_streaming(video_source, calibration, vehicle_directions,
                         bbox=[x1, y1, x2, y2],
                         metadata={}
                     )
-            
-            color = (0,0,255) if obj["crossed"] else (0,255,0)
-            cv2.rectangle(frame, (x1,y1), (x2,y2), color, 2)
-            if obj["id"] is not None:
-                cv2.putText(frame, f"ID:{obj['id']}", (x1,y1-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
         
         # --- Draw calibration lines ---
         for p1, p2 in lines:
@@ -557,32 +555,32 @@ def check_vehicle_direction_streaming(obj_id, cy, lines, allowed_direction, fram
     return False
 
 
-def check_helmet_triple_streaming(obj_id, crop, frame, original_frame, x1, y1, x2, y2):
-    """
-    Streaming version that returns (helmet_violation, triple_violation) tuple
-    """
-    import helmet_triple_detection
+# def check_helmet_triple_streaming(obj_id, crop, frame, original_frame, x1, y1, x2, y2):
+#     """
+#     Streaming version that returns (helmet_violation, triple_violation) tuple
+#     """
+#     import helmet_triple_detection
     
-    helmet_violation = False
-    triple_violation = False
+#     helmet_violation = False
+#     triple_violation = False
     
-    # Triple riding check
-    results_triple = helmet_triple_detection.model_triple(crop, conf=0.8)[0]
-    if len(results_triple.boxes) > 0:
-        triple_violation = True
-        cv2.putText(frame, "TRIPLE RIDING!", (x1, y1 - 50),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+#     # Triple riding check
+#     results_triple = helmet_triple_detection.model_triple(crop, conf=0.8)[0]
+#     if len(results_triple.boxes) > 0:
+#         triple_violation = True
+#         cv2.putText(frame, "TRIPLE RIDING!", (x1, y1 - 50),
+#                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+#         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
     
-    # Helmet check
-    results_helmet = helmet_triple_detection.model_helmet(crop)[0]
-    helmet_count = sum(1 for b in results_helmet.boxes.cls.cpu().numpy()
-                       if results_helmet.names[int(b)].lower() == "helmet")
+#     # Helmet check
+#     results_helmet = helmet_triple_detection.model_helmet(crop)[0]
+#     helmet_count = sum(1 for b in results_helmet.boxes.cls.cpu().numpy()
+#                        if results_helmet.names[int(b)].lower() == "helmet")
     
-    if helmet_count == 0:
-        helmet_violation = True
-        cv2.putText(frame, "NO HELMET!", (x1, y1 - 70),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+#     if helmet_count == 0:
+#         helmet_violation = True
+#         cv2.putText(frame, "NO HELMET!", (x1, y1 - 70),
+#                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+#         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
     
-    return helmet_violation, triple_violation
+#     return helmet_violation, triple_violation

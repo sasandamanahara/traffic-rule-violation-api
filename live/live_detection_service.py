@@ -188,7 +188,7 @@ class LiveDetectionService:
         with self.violations_lock:
             self.violations.appendleft(violation)  # Most recent first
             violation_count = len(self.violations)
-            print(f"[DEBUG] Added violation: {violation_type}, ID: {violation_id}, Total: {violation_count}")
+            # print(f"[DEBUG] Added violation: {violation_type}, ID: {violation_id}, Total: {violation_count}")
         
         with self.status_lock:
             self.status['violation_count'] = violation_count
@@ -274,7 +274,7 @@ class LiveDetectionService:
         """Get recent violations"""
         with self.violations_lock:
             violations_list = list(self.violations)[:limit]
-            print(f"[DEBUG] get_violations: returning {len(violations_list)} violations (total in deque: {len(self.violations)})")
+            # print(f"[DEBUG] get_violations: returning {len(violations_list)} violations (total in deque: {len(self.violations)})")
             return violations_list
     
     def get_status(self):

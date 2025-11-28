@@ -172,7 +172,7 @@ def get_live_violations():
         limit = request.args.get('limit', 50, type=int)
         
         violations = service.get_violations(limit=limit)
-        print(f"[DEBUG] Retrieved {len(violations)} violations from service")
+        # print(f"[DEBUG] Retrieved {len(violations)} violations from service")
         
         # Convert image data to base64 for JSON response
         violations_json = []
@@ -203,7 +203,7 @@ def get_live_violations():
                 traceback.print_exc()
                 continue
         
-        print(f"[DEBUG] Returning {len(violations_json)} violations to client")
+        # print(f"[DEBUG] Returning {len(violations_json)} violations to client")
         return jsonify({
             'success': True,
             'violations': violations_json,
