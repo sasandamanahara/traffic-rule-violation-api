@@ -50,12 +50,12 @@ def calculate_speed(obj_id, cx, cy, line1, line2, last_positions,
                             0.6, (255, 255, 0), 2)
 
                 # --- Save speeding vehicle image ---
-                if current_speed > 30:
-                    folder_path = os.path.join("violations", "speed", f"ID_{obj_id}")
-                    os.makedirs(folder_path, exist_ok=True)
-                    crop = original_frame[y1:y2, x1:x2]
-                    if crop.size > 0:
-                        filename = os.path.join(folder_path, f"speed_{int(current_speed)}.jpg")
-                        cv2.imwrite(filename, crop)
+                # if current_speed > 30:
+                #     folder_path = os.path.join("violations", "speed", f"ID_{obj_id}")
+                    # os.makedirs(folder_path, exist_ok=True)
+                    # crop = original_frame[y1:y2, x1:x2]
+                    # if crop.size > 0:
+                    #     filename = os.path.join(folder_path, f"speed_{int(current_speed)}.jpg")
+                    #     cv2.imwrite(filename, crop)
 
     return speeds

@@ -148,7 +148,7 @@ def initialize_stream(video_source):
 
     # Compute motion lines
     motion_lines = []
-    print(len(paths))
+    # print(len(paths))
     for obj_id, points in paths.items():
         if len(points) >= 2:
             start = np.array(points[0])
