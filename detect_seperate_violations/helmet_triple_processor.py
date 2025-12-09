@@ -125,7 +125,7 @@ def ensure_dir(path):
 # ---------------------------------------------------------------------
 # MAIN PROCESSOR (returns violations list + video)
 # ---------------------------------------------------------------------
-def detect_violations_in_video(
+def detect_helmet_triple_in_video(
     input_video_path,
     snapshot_folder,
     output_video_folder,
