@@ -10,8 +10,6 @@ import numpy as np
 # ---------------------------------------------------------------------
 # GLOBAL MODELS
 # ---------------------------------------------------------------------
-# model_helmet = YOLO("../models/Helmet_Detection.pt")
-# model_triple = YOLO("../models/Triple_Riding_Detection.pt")
 seen_obj_ids_trafficlight = set()
 
 def ensure_dir(d):
