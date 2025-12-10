@@ -1,4 +1,3 @@
-# helmet_triple_processor.py
 import os
 import time
 import cv2
@@ -9,13 +8,8 @@ import shutil
 import numpy as np
 import math
 
-# ---------------------------------------------------------------------
-# GLOBAL MODELS
-# ---------------------------------------------------------------------
-# model_helmet = YOLO("../models/Helmet_Detection.pt")
-# model_triple = YOLO("../models/Triple_Riding_Detection.pt")
-# seen_obj_ids_helmet = set()
-# seen_obj_ids_triple = set()
+
+seen_obj_ids_speed = set()
 
 paths = {}
 last_positions = {}
@@ -161,14 +155,16 @@ def is_inside_lines(p, line1, line2):
 
     return 0 <= dist <= line_dist if line_dist > 0 else line_dist <= dist <= 0
 
+violations_found = []
 
 def calculate_speed(obj_id, cx, cy, line1, line2, last_positions, 
-                    PIXELS_PER_METER, frame_time, speeds, frame, box,original_frame):
+                    PIXELS_PER_METER, frame_time, speeds, frame, box,original_frame, conf,snapshot_folder,frame_idx):
     """
     Updates speeds dictionary after calculating speed.
     Draws a blue box if speed > 30 km/h.
     Saves cropped image of speeding vehicle.
     """
+    
     inside = is_inside_lines((cx, cy), line1, line2)
     if inside:
         if obj_id in last_positions:
@@ -192,20 +188,35 @@ def calculate_speed(obj_id, cx, cy, line1, line2, last_positions,
 
                 # --- Save speeding vehicle image ---
                 if current_speed > 30:
-                    folder_path = os.path.join("violations", "speed", f"ID_{obj_id}")
-                    os.makedirs(folder_path, exist_ok=True)
-                    crop = original_frame[y1:y2, x1:x2]
-                    if crop.size > 0:
-                        filename = os.path.join(folder_path, f"speed_{int(current_speed)}.jpg")
-                        cv2.imwrite(filename, crop)
+                    print(seen_obj_ids_speed)
+                    if int(obj_id) not in seen_obj_ids_speed:
+                        snap_name = f"speed_{obj_id}.jpg"
+                        print(snap_name)
+                        violations_found.append({
+                            "type": "Speed",
+                            "confidence": float(conf),
+                            "bbox": [x1, y1, x2, y2],
+                            "snapshot_name": snap_name,
+                            "object_id": int(obj_id),
+                            "snapshot_url" : f"{Config.API_BASE_URL}/static/snapshots/{snap_name}/{snap_name}",
+                            "speed": current_speed,
+                            "frame": frame_idx,
+                        })
+
+                        seen_obj_ids_speed.add(int(obj_id))
+
+                        folder_path = os.path.join(snapshot_folder, snap_name)
+                        os.makedirs(folder_path, exist_ok=True)
+                        crop = original_frame[y1:y2, x1:x2]
+                        if crop.size > 0:
+                            filename = os.path.join(folder_path, snap_name)
+                            print(filename)
+                            cv2.imwrite(filename, crop)
 
     return speeds
 
 
 
-# ---------------------------------------------------------------------
-# HELPER
-# ---------------------------------------------------------------------
 def ensure_dir(path):
     if os.path.exists(path):
         # Remove everything inside the directory
@@ -250,22 +261,21 @@ def detect_speed_violation_in_video(
         # vehicle tracking
         results_vehicle = model.track(frame, persist=True, verbose=False)
 
-        tracked_objects = []
-
         if results_vehicle and results_vehicle[0].boxes.id is not None:
             boxes = results_vehicle[0].boxes.xyxy.cpu().numpy()
             ids = results_vehicle[0].boxes.id.cpu().numpy()
             classes = results_vehicle[0].boxes.cls.cpu().numpy()
+            conf = results_vehicle[0].boxes.conf.cpu().numpy()
 
             # --- Speed and direction detection ---
-            for box, obj_id, cls in zip(boxes, ids, classes):
+            for box, obj_id, cls,conf in zip(boxes, ids, classes, conf):
                 x1, y1, x2, y2 = map(int, box)
                 cx, cy = int((x1 + x2)/2), int((y1 + y2)/2)
 
                 speeds = calculate_speed(
                     obj_id, cx, cy, line1, line2,
                     last_positions, PIXELS_PER_METER,
-                    frame_time, speeds, frame, box, original_frame
+                    frame_time, speeds, frame, box, original_frame,conf,snapshot_folder,frame_idx
                 )
                 last_positions[obj_id] = (cx, cy)
                 
@@ -277,16 +287,11 @@ def detect_speed_violation_in_video(
     cap.release()
     cv2.destroyAllWindows()
 
-    print(violations)
-
-    # seen_obj_ids_helmet.clear()
-    # seen_obj_ids_triple.clear()
+    seen_obj_ids_speed.clear()
 
     return jsonify({
             'totalFrames': frame_idx,
-            'processedFrames': frame_idx,  # frames actually processed
+            'processedFrames': frame_idx,
             'processingTime': round(time.time() - start_time, 2),
-            'violations': violations
+            'violations': violations_found
         })
-
-    # return violations

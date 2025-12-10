@@ -222,9 +222,7 @@ def detect_helmet_triple_in_video(
 
     return jsonify({
             'totalFrames': frame_idx,
-            'processedFrames': frame_idx,  # frames actually processed
+            'processedFrames': frame_idx,
             'processingTime': round(time.time() - start_time, 2),
             'violations': violations
         })
-
-    # return violations
