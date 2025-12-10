@@ -148,7 +148,8 @@ def detect_noparking_violation_in_video(
 
                 
         if frame_idx >1:
-            cv2.imshow("Parking Violation Detection", frame)
+            cv2.imshow("Illegal Parking Violation Detection", frame)
+            cv2.setWindowProperty("Illegal Parking Violation Detection", cv2.WND_PROP_TOPMOST, 1)
             if cv2.waitKey(1) == 27:
                 break
 

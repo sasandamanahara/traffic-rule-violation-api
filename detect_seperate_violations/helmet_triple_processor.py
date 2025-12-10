@@ -17,7 +17,7 @@ seen_obj_ids_triple = set()
 # ---------------------------------------------------------------------
 # HELMET + TRIPLE CHECK
 # ---------------------------------------------------------------------
-def check_helmet_triple(obj_id, crop, original_frame, x1, y1, x2, y2, coverage_threshold=0.99):
+def check_helmet_triple(obj_id, crop, frame, original_frame, x1, y1, x2, y2, coverage_threshold=0.99):
     violations_found = []
 
     # ================================================================
@@ -58,6 +58,7 @@ def check_helmet_triple(obj_id, crop, original_frame, x1, y1, x2, y2, coverage_t
                 })
                 seen_obj_ids_triple.add(int(obj_id))
 
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
 
     # ================================================================
     # HELMET CHECK
@@ -106,6 +107,7 @@ def check_helmet_triple(obj_id, crop, original_frame, x1, y1, x2, y2, coverage_t
                 })
                 seen_obj_ids_helmet.add(int(obj_id))
 
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
     return violations_found
 
 
@@ -193,7 +195,7 @@ def detect_helmet_triple_in_video(
                     crop = original_frame[y1:y2, x1:x2]
 
                     violations_found_in_frame = check_helmet_triple(
-                        motor_ids[i], crop, original_frame, x1, y1, x2, y2
+                        motor_ids[i], crop, frame , original_frame, x1, y1, x2, y2
                     )
 
                     # --- save snapshots + append violations ---
@@ -208,7 +210,8 @@ def detect_helmet_triple_in_video(
                         violations.append(v)
 
         # render window
-        cv2.imshow("Vehicle + Helmet + Triple", frame)
+        cv2.imshow("Helmet + Triple Violation Detection", frame)
+        cv2.setWindowProperty("Helmet + Triple Violation Detection", cv2.WND_PROP_TOPMOST, 1)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 

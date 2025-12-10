@@ -270,7 +270,8 @@ def detect_redlight_violation_in_video(
                     })
                     seen_obj_ids_trafficlight.add(obj['id'])
                 
-        cv2.imshow("Vehicle + Speed + RLVD", frame)
+        cv2.imshow("Red Light Violation Detection", frame)
+        cv2.setWindowProperty("Red Light Violation Detection", cv2.WND_PROP_TOPMOST, 1)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
