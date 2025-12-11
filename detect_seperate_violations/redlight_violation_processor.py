@@ -188,16 +188,17 @@ def detect_redlight_violation_in_video(
     ensure_dir(output_video_folder)
 
     traffic_light_result = detect_traffic_light_and_line(input_video_path)
-    traffic_light_box, traffic_light_line = traffic_light_result
-    if traffic_light_box is None and isinstance(traffic_light_line, int):
+    if traffic_light_result is None:
         traffic_light_box = None
         traffic_light_line = None
     else:
-        traffic_light_box = traffic_light_result["traffic_light_box"]
-        traffic_light_line = traffic_light_result["traffic_light_line"]
+        traffic_light_box = traffic_light_result.get("traffic_light_box")
+        traffic_light_line = traffic_light_result.get("traffic_light_line")
 
 
-    model_vehicle = YOLO("../models/new best.pt")
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    MODELS_DIR = os.path.join(BASE_DIR, 'models')
+    model_vehicle = YOLO(os.path.join(MODELS_DIR, 'new best.pt'))
 
     cap = cv2.VideoCapture(input_video_path)
     if not cap.isOpened():
@@ -264,20 +265,24 @@ def detect_redlight_violation_in_video(
                         "confidence": obj["conf"],
                         "bbox": [x1, y1, x2, y2],
                         "snapshot_name": snap_name,
-                        "object_id": int(obj_id),
+                        "object_id": int(obj['id']) if obj['id'] is not None else None,
                         "frame": frame_idx,
                         "snapshot_url" : f"{Config.API_BASE_URL}/static/snapshots/{snap_name}"
                     })
                     seen_obj_ids_trafficlight.add(obj['id'])
                 
-        cv2.imshow("Red Light Violation Detection", frame)
-        cv2.setWindowProperty("Red Light Violation Detection", cv2.WND_PROP_TOPMOST, 1)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+        # Skip display in headless server environment
+        # cv2.imshow("Red Light Violation Detection", frame)
+        # cv2.setWindowProperty("Red Light Violation Detection", cv2.WND_PROP_TOPMOST, 1)
+        # if cv2.waitKey(1) & 0xFF == ord('q'):
+        #     break
 
     seen_obj_ids_trafficlight.clear()
     cap.release()
-    cv2.destroyAllWindows()
+    try:
+        cv2.destroyAllWindows()
+    except:
+        pass
     return jsonify({
             'totalFrames': frame_idx,
             'processedFrames': frame_idx,  # frames actually processed

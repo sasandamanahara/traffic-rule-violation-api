@@ -23,7 +23,9 @@ def detect_direction_violation_in_video(
     # -----------------------
     # Load Models
     # -----------------------
-    road_model = YOLO("../models/Parking_best.pt")
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    MODELS_DIR = os.path.join(BASE_DIR, 'models')
+    road_model = YOLO(os.path.join(MODELS_DIR, 'Parking_best.pt'))
     vehicle_model = YOLO("yolov8n.pt")
 
     cap = cv2.VideoCapture(input_video_path)
@@ -191,11 +193,12 @@ def detect_direction_violation_in_video(
                             "snapshot_url" : f"{Config.API_BASE_URL}/static/snapshots/{snap_name}"
                         })
                         seen_obj_ids_direction.add(int(matched_id))
-                resized = cv2.resize(overlay, None, fx=0.5, fy=0.5)
-                cv2.imshow("Direction Violation Detection", resized)
-                cv2.setWindowProperty("Direction Violation Detection", cv2.WND_PROP_TOPMOST, 1)
-                if cv2.waitKey(1) & 0xFF == 27:
-                    break
+                # Skip display in headless server environment
+                # resized = cv2.resize(overlay, None, fx=0.5, fy=0.5)
+                # cv2.imshow("Direction Violation Detection", resized)
+                # cv2.setWindowProperty("Direction Violation Detection", cv2.WND_PROP_TOPMOST, 1)
+                # if cv2.waitKey(1) & 0xFF == 27:
+                #     break
 
         # Remove long-missing vehicles
         to_remove = [vid for vid, miss in vehicle_miss_count.items() if miss > MAX_MISS]
@@ -207,7 +210,10 @@ def detect_direction_violation_in_video(
 
     # Cleanup
     cap.release()
-    cv2.destroyAllWindows()
+    try:
+        cv2.destroyAllWindows()
+    except:
+        pass
 
     seen_obj_ids_direction.clear()
 

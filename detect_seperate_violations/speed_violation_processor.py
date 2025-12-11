@@ -276,14 +276,17 @@ def detect_speed_violation_in_video(
                 )
                 last_positions[obj_id] = (cx, cy)
                 
-        # render window
-        cv2.imshow("Speed Violation Detection", frame)
-        cv2.setWindowProperty("Speed Violation Detection", cv2.WND_PROP_TOPMOST, 1)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+        # Skip display in headless server environment
+        # cv2.imshow("Speed Violation Detection", frame)
+        # cv2.setWindowProperty("Speed Violation Detection", cv2.WND_PROP_TOPMOST, 1)
+        # if cv2.waitKey(1) & 0xFF == ord('q'):
+        #     break
 
     cap.release()
-    cv2.destroyAllWindows()
+    try:
+        cv2.destroyAllWindows()
+    except:
+        pass
 
     seen_obj_ids_speed.clear()
 

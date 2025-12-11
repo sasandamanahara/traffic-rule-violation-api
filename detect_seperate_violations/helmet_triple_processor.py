@@ -9,8 +9,10 @@ import shutil
 # ---------------------------------------------------------------------
 # GLOBAL MODELS
 # ---------------------------------------------------------------------
-model_helmet = YOLO("../models/Helmet_Detection.pt")
-model_triple = YOLO("../models/Triple_Riding_Detection.pt")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MODELS_DIR = os.path.join(BASE_DIR, 'models')
+model_helmet = YOLO(os.path.join(MODELS_DIR, 'Helmet_Detection.pt'))
+model_triple = YOLO(os.path.join(MODELS_DIR, 'Triple_Riding_Detection.pt'))
 seen_obj_ids_helmet = set()
 seen_obj_ids_triple = set()
 
@@ -137,7 +139,7 @@ def detect_helmet_triple_in_video(
     ensure_dir(snapshot_folder)
     ensure_dir(output_video_folder)
 
-    model_vehicle = YOLO("../models/new best.pt")
+    model_vehicle = YOLO(os.path.join(MODELS_DIR, 'new best.pt'))
 
     cap = cv2.VideoCapture(input_video_path)
     if not cap.isOpened():
@@ -209,14 +211,17 @@ def detect_helmet_triple_in_video(
 
                         violations.append(v)
 
-        # render window
-        cv2.imshow("Helmet + Triple Violation Detection", frame)
-        cv2.setWindowProperty("Helmet + Triple Violation Detection", cv2.WND_PROP_TOPMOST, 1)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+        # Skip display in headless server environment
+        # cv2.imshow("Helmet + Triple Violation Detection", frame)
+        # cv2.setWindowProperty("Helmet + Triple Violation Detection", cv2.WND_PROP_TOPMOST, 1)
+        # if cv2.waitKey(1) & 0xFF == ord('q'):
+        #     break
 
     cap.release()
-    cv2.destroyAllWindows()
+    try:
+        cv2.destroyAllWindows()
+    except:
+        pass
 
     print(violations)
 

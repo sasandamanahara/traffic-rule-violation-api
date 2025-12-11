@@ -20,7 +20,9 @@ def detect_noparking_violation_in_video(
     seen_obj_ids_noparking = set()
     violations = []
     start_time = time.time()
-    sign_model = YOLO("../models/Parking_best.pt")       # No Parking sign detection
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    MODELS_DIR = os.path.join(BASE_DIR, 'models')
+    sign_model = YOLO(os.path.join(MODELS_DIR, 'Parking_best.pt'))       # No Parking sign detection
     vehicle_model = YOLO("yolov8n.pt")           # Vehicle detection
     cap = cv2.VideoCapture(input_video_path)
 
@@ -147,14 +149,18 @@ def detect_noparking_violation_in_video(
                     
 
                 
-        if frame_idx >1:
-            cv2.imshow("Illegal Parking Violation Detection", frame)
-            cv2.setWindowProperty("Illegal Parking Violation Detection", cv2.WND_PROP_TOPMOST, 1)
-            if cv2.waitKey(1) == 27:
-                break
+        # Skip display in headless server environment
+        # if frame_idx >1:
+        #     cv2.imshow("Illegal Parking Violation Detection", frame)
+        #     cv2.setWindowProperty("Illegal Parking Violation Detection", cv2.WND_PROP_TOPMOST, 1)
+        #     if cv2.waitKey(1) == 27:
+        #         break
 
     cap.release()
-    cv2.destroyAllWindows()
+    try:
+        cv2.destroyAllWindows()
+    except:
+        pass
 
 
     seen_obj_ids_noparking.clear()

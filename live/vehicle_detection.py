@@ -40,7 +40,9 @@ class VehicleDetector:
         self.detection_queue = queue.Queue(maxsize=5)
 
         # YOLO model (adjust path)
-        self.model = YOLO("../models/new best.pt")
+        BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        MODELS_DIR = os.path.join(BASE_DIR, 'models')
+        self.model = YOLO(os.path.join(MODELS_DIR, 'new best.pt'))
         self.stopped = False
 
         # Calibration
