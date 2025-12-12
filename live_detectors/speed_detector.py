@@ -116,10 +116,13 @@ class SpeedDetector:
             current_speed = self.speeds[obj_id]
             
             color = (255, 0, 0) if current_speed > 30 else (0, 255, 0)
-            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-            cv2.putText(frame, f"{current_speed:.1f} km/h", 
+            if current_speed > 30:
+                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                cv2.putText(frame, f"{current_speed:.1f} km/h", 
                        (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 
                        0.6, (255, 255, 0), 2)
+
+            
             
             return current_speed
         

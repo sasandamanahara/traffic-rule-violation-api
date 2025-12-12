@@ -147,3 +147,4 @@ class NoParkingDetector:
         self.sign_centers = []
         self.sign_detected = False
 
+

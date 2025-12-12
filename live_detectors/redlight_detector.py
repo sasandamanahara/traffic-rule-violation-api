@@ -161,3 +161,4 @@ class RedLightDetector:
         self.light_history.clear()
         self.crossed_vehicles.clear()
 
+

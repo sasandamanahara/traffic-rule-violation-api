@@ -191,3 +191,4 @@ class DirectionDetector:
         self.vehicle_sequence.clear()
         self._initialized_road = False
 
+

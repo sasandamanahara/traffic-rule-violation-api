@@ -157,3 +157,4 @@ class HelmetTripleDetector:
         self.seen_obj_ids_triple.clear()
         self.violations.clear()
 
+

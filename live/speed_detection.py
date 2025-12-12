@@ -44,10 +44,11 @@ def calculate_speed(obj_id, cx, cy, line1, line2, last_positions,
 
                 # Draw bounding box and speed text
                 color = (255, 0, 0) if current_speed > 30 else (0, 255, 0)
-                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                cv2.putText(frame, f"{current_speed:.1f} km/h", 
-                            (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 
-                            0.6, (255, 255, 0), 2)
+                if current_speed > 30:
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                    cv2.putText(frame, f"{current_speed:.1f} km/h", 
+                               (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 
+                               0.6, (255, 255, 0), 2)
 
                 # --- Save speeding vehicle image ---
                 # if current_speed > 30:
