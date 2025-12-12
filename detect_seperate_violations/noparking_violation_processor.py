@@ -84,7 +84,7 @@ def detect_noparking_violation_in_video(
                     # --------------------------------------
                     # Draw 50px radius mask around the sign
                     # --------------------------------------
-                    cv2.circle(overlay, (x1, y2+100), DIST_THRESHOLD, (0, 0, 255), -1)
+                    # cv2.circle(overlay, (x1, y2+100), DIST_THRESHOLD, (0, 0, 255), -1)
 
 
 

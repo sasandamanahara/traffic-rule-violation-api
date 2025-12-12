@@ -6,24 +6,26 @@ from ultralytics import YOLO
 from flask import jsonify
 from config import Config
 import shutil
+import torch
+
 # ---------------------------------------------------------------------
 # GLOBAL MODELS
 # ---------------------------------------------------------------------
-model_helmet = YOLO("../models/Helmet_Detection.pt")
-model_triple = YOLO("../models/Triple_Riding_Detection.pt")
+model_helmet = YOLO("../models/Helmet_Detection.pt").to("cuda")
+model_triple = YOLO("../models/Triple_Riding_Detection.pt").to("cuda")
 seen_obj_ids_helmet = set()
 seen_obj_ids_triple = set()
-
+print("CUDA inside Flask:", torch.cuda.is_available())
 # ---------------------------------------------------------------------
 # HELMET + TRIPLE CHECK
 # ---------------------------------------------------------------------
-def check_helmet_triple(obj_id, crop, frame, original_frame, x1, y1, x2, y2, coverage_threshold=0.99):
+def check_helmet_triple(obj_id, crop, frame, original_frame, x1, y1, x2, y2, coverage_threshold=0.90):
     violations_found = []
 
     # ================================================================
     # TRIPLE RIDING CHECK
     # ================================================================
-    triple_results = model_triple(original_frame, conf=0.783)[0]
+    triple_results = model_triple(original_frame, conf=0.783, device="cuda")[0]
 
     for box, conf in zip(triple_results.boxes.xyxy,
                          triple_results.boxes.conf.cpu().numpy()):
@@ -63,7 +65,7 @@ def check_helmet_triple(obj_id, crop, frame, original_frame, x1, y1, x2, y2, cov
     # ================================================================
     # HELMET CHECK
     # ================================================================
-    helmet_results = model_helmet(original_frame, conf=0.6)[0]
+    helmet_results = model_helmet(original_frame, conf=0.6, device="cuda")[0]
 
     for box, cls, conf in zip(
             helmet_results.boxes.xyxy,
@@ -137,7 +139,7 @@ def detect_helmet_triple_in_video(
     ensure_dir(snapshot_folder)
     ensure_dir(output_video_folder)
 
-    model_vehicle = YOLO("../models/new best.pt")
+    model_vehicle = YOLO("../models/new best.pt").to("cuda")
 
     cap = cv2.VideoCapture(input_video_path)
     if not cap.isOpened():
@@ -152,10 +154,12 @@ def detect_helmet_triple_in_video(
             break
 
         frame_idx += 1
+        if frame_idx % 2 != 0:
+            continue
         original_frame = frame.copy()
 
         # vehicle tracking
-        results_vehicle = model_vehicle.track(frame, persist=True, verbose=False)
+        results_vehicle = model_vehicle.track(frame, persist=True, verbose=False, device="cuda")
 
         if results_vehicle and results_vehicle[0].boxes.id is not None:
 

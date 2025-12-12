@@ -223,7 +223,7 @@ def detect_redlight_violation_in_video(
 
             # Draw traffic light box
             cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 255), 2)
-            cv2.putText(frame, f"LIGHT:{light_state}", (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.8,
+            cv2.putText(frame, f"{light_state}", (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.8,
                         (0,0,255) if light_state=="RED" else (0,255,0), 2)
         else:
             light_state = "GREEN"
