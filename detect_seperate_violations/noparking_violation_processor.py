@@ -122,7 +122,7 @@ def detect_noparking_violation_in_video(
                 color = (0, 255, 0)
                 if near_count.get(vehicle_id, 0) >= VIOLATION_FRAMES:
                     color = (0, 0, 255)
-                    cv2.putText(frame, "PARKING VIOLATION!", (x1, y1 - 20),
+                    cv2.putText(frame, "Parking Violation!", (x1, y1 - 20),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
                     cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
 

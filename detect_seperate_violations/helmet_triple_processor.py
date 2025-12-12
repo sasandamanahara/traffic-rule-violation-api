@@ -61,6 +61,7 @@ def check_helmet_triple(obj_id, crop, frame, original_frame, x1, y1, x2, y2, cov
                 seen_obj_ids_triple.add(int(obj_id))
 
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+            cv2.putText(frame, "Triple Riding", (x1, y1 - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
     # ================================================================
     # HELMET CHECK
@@ -110,6 +111,7 @@ def check_helmet_triple(obj_id, crop, frame, original_frame, x1, y1, x2, y2, cov
                 seen_obj_ids_helmet.add(int(obj_id))
 
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+            cv2.putText(frame, "No Helmet", (x1, y1 - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
     return violations_found
 
 
