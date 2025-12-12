@@ -191,11 +191,12 @@ def detect_direction_violation_in_video(
                             "snapshot_url" : f"{Config.API_BASE_URL}/static/snapshots/{snap_name}"
                         })
                         seen_obj_ids_direction.add(int(matched_id))
-                resized = cv2.resize(overlay, None, fx=0.5, fy=0.5)
-                cv2.imshow("Direction Violation Detection", resized)
-                cv2.setWindowProperty("Direction Violation Detection", cv2.WND_PROP_TOPMOST, 1)
-                if cv2.waitKey(1) & 0xFF == 27:
-                    break
+
+            resized = cv2.resize(overlay, None, fx=0.5, fy=0.5)
+            cv2.imshow("Direction Violation Detection", resized)
+            cv2.setWindowProperty("Direction Violation Detection", cv2.WND_PROP_TOPMOST, 1)
+            if cv2.waitKey(1) & 0xFF == 27:
+                break
 
         # Remove long-missing vehicles
         to_remove = [vid for vid, miss in vehicle_miss_count.items() if miss > MAX_MISS]
