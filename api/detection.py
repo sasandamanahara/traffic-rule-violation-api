@@ -46,7 +46,7 @@ def process_video_route_helmet():
         print(f"Processing Time: {processing_time} seconds")
         print(f"Violations Detected: {len(violations)}")
 
-        # You can now use these values or return them directly
+
         return jsonify({
             "totalFrames": total_frames,
             "processedFrames": processed_frames,
@@ -103,7 +103,7 @@ def process_video_route_trafficlight():
         print(f"Processing Time: {processing_time} seconds")
         print(f"Violations Detected: {len(violations)}")
 
-        # You can now use these values or return them directly
+
         return jsonify({
             "totalFrames": total_frames,
             "processedFrames": processed_frames,
@@ -160,7 +160,7 @@ def process_video_route_direction():
         print(f"Processing Time: {processing_time} seconds")
         print(f"Violations Detected: {len(violations)}")
 
-        # You can now use these values or return them directly
+
         return jsonify({
             "totalFrames": total_frames,
             "processedFrames": processed_frames,
@@ -200,7 +200,7 @@ def process_video_speed():
             output_video_folder=Config.OUTPUT_VIDEO_FOLDER
         )
 
-        result_data = result_json.get_json()  # now this is a Python dict
+        result_data = result_json.get_json() 
 
         # Access values individually
         total_frames = result_data['totalFrames']
@@ -213,7 +213,7 @@ def process_video_speed():
         print(f"Processing Time: {processing_time} seconds")
         print(f"Violations Detected: {len(violations)}")
 
-        # You can now use these values or return them directly
+
         return jsonify({
             "totalFrames": total_frames,
             "processedFrames": processed_frames,
@@ -268,7 +268,7 @@ def process_video_noparking():
         print(f"Processing Time: {processing_time} seconds")
         print(f"Violations Detected: {len(violations)}")
 
-        # You can now use these values or return them directly
+
         return jsonify({
             "totalFrames": total_frames,
             "processedFrames": processed_frames,

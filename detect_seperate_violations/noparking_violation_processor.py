@@ -1,3 +1,4 @@
+import re
 import cv2
 import numpy as np
 from ultralytics import YOLO
@@ -6,10 +7,35 @@ import time
 import os
 import time
 from config import Config
-
-
+import easyocr
+import threading
+import queue
 
 next_id = 0
+reader = easyocr.Reader(['en'])
+result_queue = queue.Queue()
+
+def process_plate_async(vehicle_crop, frame_idx, vehicle_id, r_idx, p_idx, snapshot_folder,q):
+    plate_crop = vehicle_crop.copy()
+    plate_name = f"violation2_{frame_idx}_{vehicle_id}_plate_{r_idx}_{p_idx}.jpg"
+    plate_path = os.path.join(snapshot_folder, plate_name)
+
+    # Save and reload to get accurate OCR
+    cv2.imwrite(plate_path, plate_crop)
+    image = cv2.imread(plate_path)
+
+    # Resize, grayscale, OCR
+    image = cv2.resize(image, None, fx=1.5, fy=1.5, interpolation=cv2.INTER_CUBIC)
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    results = reader.readtext(gray, detail=0)
+    text_raw = ''.join(results).upper()
+    plate_text = re.sub(r'[^A-Z0-9-]', '', text_raw)
+
+
+    q.put((frame_idx, plate_text))
+    print(f"Detected Plate for vehicle {vehicle_id}: {plate_text}")
+    
+
 
 def detect_noparking_violation_in_video(
     input_video_path,
@@ -58,6 +84,7 @@ def detect_noparking_violation_in_video(
         if frame_idx % 5 != 0:
             continue
 
+        original_frame = frame.copy()   
         frame = cv2.resize(frame, None, fx=0.5, fy=0.5)
 
         if frame_idx == 5:
@@ -68,6 +95,7 @@ def detect_noparking_violation_in_video(
         # ---------------------------
         
         sign_centers = []
+
 
         overlay = frame.copy()
 
@@ -131,22 +159,26 @@ def detect_noparking_violation_in_video(
 
                     if vehicle_id not in seen_obj_ids_noparking:
                         # Save snapshot
-                        vehicle_crop = frame[y1:y2, x1:x2]
+                        x1_orig, y1_orig = int(x1 * 2), int(y1 * 2)
+                        x2_orig, y2_orig = int(x2 * 2), int(y2 * 2)
+
+                        # vehicle_crop = frame[y1:y2, x1:x2]
+                        vehicle_crop2 = original_frame[y1_orig:y2_orig, x1_orig:x2_orig]
                         plate_model = YOLO("../models/Number_Plate_Detection.pt")
-                        plate_results = plate_model(vehicle_crop, verbose=False)
+                        plate_results = plate_model(vehicle_crop2, verbose=False)
 
 
                         for r_idx, r in enumerate(plate_results):
                             for p_idx, box in enumerate(r.boxes.xyxy):
                                 px1, py1, px2, py2 = map(int, box)
-                                plate_crop = vehicle_crop[py1:py2, px1:px2]
+                                vehicle_crop2_plate = vehicle_crop2[py1:py2, px1:px2]
 
-                                # Save the cropped plate
-                                plate_name = f"violation_{frame_idx}_{vehicle_id}_plate_{r_idx}_{p_idx}.jpg"
-                                plate_path = os.path.join(snapshot_folder, plate_name)
-                                cv2.imwrite(plate_path, plate_crop)
-
-
+                                if r_idx == len(plate_results) - 1 and p_idx == len(r.boxes.xyxy) - 1:
+                                    t = threading.Thread(
+                                        target=process_plate_async,
+                                        args=(vehicle_crop2_plate, frame_idx, vehicle_id, r_idx, p_idx, snapshot_folder, result_queue)
+                                    )
+                                    t.start()
 
                         snap_path = os.path.join(snapshot_folder, f"violation_{frame_idx}_{vehicle_id}.jpg")
 
@@ -176,7 +208,15 @@ def detect_noparking_violation_in_video(
     cap.release()
     cv2.destroyAllWindows()
 
-
+    while not result_queue.empty():
+        frame_idx_q, plate_text = result_queue.get()
+        
+        # Find the violation with the same frame
+        for violation in violations:
+            if violation["frame"] == frame_idx_q:
+                violation["plate_text"] = plate_text  # add the OCR result
+                break  # stop after finding the first match
+                
     seen_obj_ids_noparking.clear()
 
     return jsonify({
