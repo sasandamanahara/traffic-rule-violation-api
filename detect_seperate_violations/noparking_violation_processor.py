@@ -26,7 +26,7 @@ def detect_noparking_violation_in_video(
 
     near_count = {}  # vehicle_id -> frames near the sign
     VIOLATION_FRAMES = 200
-    DIST_THRESHOLD = 250
+    DIST_THRESHOLD = 150
 
     # Simple tracker
     tracker = {}
@@ -53,13 +53,16 @@ def detect_noparking_violation_in_video(
         if not ret:
             break
 
+        frame_idx += 1
+
+        if frame_idx % 5 != 0:
+            continue
+
         frame = cv2.resize(frame, None, fx=0.5, fy=0.5)
 
-        if frame_idx == 1:
+        if frame_idx == 5:
             sign_results = sign_model(frame, verbose=False)
 
-        frame_idx += 1
-        
         # ---------------------------
         # Detect No Parking Signs
         # ---------------------------
@@ -77,9 +80,9 @@ def detect_noparking_violation_in_video(
                     sign_centers.append((x1, y2+100))
 
                     # Sign box
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
-                    cv2.putText(frame, "No Parking", (x1, y1 - 5),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                    # cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                    # cv2.putText(frame, "No Parking", (x1, y1 - 5),
+                    #             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
                     # --------------------------------------
                     # Draw 50px radius mask around the sign
@@ -128,6 +131,23 @@ def detect_noparking_violation_in_video(
 
                     if vehicle_id not in seen_obj_ids_noparking:
                         # Save snapshot
+                        vehicle_crop = frame[y1:y2, x1:x2]
+                        plate_model = YOLO("../models/Number_Plate_Detection.pt")
+                        plate_results = plate_model(vehicle_crop, verbose=False)
+
+
+                        for r_idx, r in enumerate(plate_results):
+                            for p_idx, box in enumerate(r.boxes.xyxy):
+                                px1, py1, px2, py2 = map(int, box)
+                                plate_crop = vehicle_crop[py1:py2, px1:px2]
+
+                                # Save the cropped plate
+                                plate_name = f"violation_{frame_idx}_{vehicle_id}_plate_{r_idx}_{p_idx}.jpg"
+                                plate_path = os.path.join(snapshot_folder, plate_name)
+                                cv2.imwrite(plate_path, plate_crop)
+
+
+
                         snap_path = os.path.join(snapshot_folder, f"violation_{frame_idx}_{vehicle_id}.jpg")
 
                         snap_name = f"violation_{frame_idx}_{vehicle_id}.jpg"
