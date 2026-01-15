@@ -17,8 +17,8 @@ reader = easyocr.Reader(['en'])
 result_queue = queue.Queue()
 
 
-BOT_TOKEN = "8519646438:AAEX3aWjxKHEdR6OaartP9SDdScJBbg9g0E"
-CHAT_ID = "7886833323"
+BOT_TOKEN = "MyTockenHere"
+CHAT_ID = "MyChatIDHere"
 SNAPSHOT_FOLDER = Config.SNAPSHOT_FOLDER
 
 
