@@ -10,11 +10,34 @@ from config import Config
 import easyocr
 import threading
 import queue
+import requests
 
 next_id = 0
 reader = easyocr.Reader(['en'])
 result_queue = queue.Queue()
 
+
+BOT_TOKEN = "8519646438:AAEX3aWjxKHEdR6OaartP9SDdScJBbg9g0E"
+CHAT_ID = "7886833323"
+SNAPSHOT_FOLDER = Config.SNAPSHOT_FOLDER
+
+
+def send_telegram_violation(violation):
+    # Text message
+    text = f"Violation detected!\nPlate: {violation['plate_text']}\nType: {violation['type']}\nFrame: {violation['frame']}"
+
+    # File path
+    file_path = os.path.join(SNAPSHOT_FOLDER, violation["snapshot"])
+    
+    # Send photo with caption
+    with open(file_path, 'rb') as f:
+        requests.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto",
+            data={"chat_id": CHAT_ID, "caption": text},
+            files={"photo": f}
+        )
+    print(f"Telegram sent for {violation['plate_text']}")
+    
 def process_plate_async(vehicle_crop, frame_idx, vehicle_id, r_idx, p_idx, snapshot_folder,q):
     plate_crop = vehicle_crop.copy()
     plate_name = f"violation2_{frame_idx}_{vehicle_id}_plate_{r_idx}_{p_idx}.jpg"
@@ -215,6 +238,7 @@ def detect_noparking_violation_in_video(
         for violation in violations:
             if violation["frame"] == frame_idx_q:
                 violation["plate_text"] = plate_text  # add the OCR result
+                send_telegram_violation(violation)
                 break  # stop after finding the first match
                 
     seen_obj_ids_noparking.clear()
